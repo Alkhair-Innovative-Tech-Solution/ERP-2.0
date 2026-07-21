@@ -1,0 +1,102 @@
+name: Deploy to AIT1
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip rebuild (use with seed only)'
+        type: boolean
+        default: false
+      skip_seed:
+        description: 'Skip data seed pipeline'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest code
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd /var/www/AIT-LMS
+          if [ -z "${GIT_TOKEN}" ]; then
+            echo "GIT_TOKEN is empty! Using git pull with defaults."
+            git pull origin main
+          else
+            git remote set-url origin "https://Rao-Faizan:${GIT_TOKEN}@github.com/Rao-Faizan/AIT-LMS.git"
+            git fetch origin main
+            git reset --hard origin/main
+            git remote set-url origin https://github.com/Rao-Faizan/AIT-LMS.git
+          fi
+
+      - name: Update .env for production
+        run: |
+          cd /var/www/AIT-LMS
+          sed -i '/^NEXT_PUBLIC_API_URL=/d' .env 2>/dev/null || true
+          echo "NEXT_PUBLIC_API_URL=https://ait.iak.ngo" >> .env
+
+          sed -i '/^LMS_API_URL=/d' .env 2>/dev/null || true
+          echo "LMS_API_URL=https://lms.iak.ngo" >> .env
+
+          sed -i '/^NODE_ENV=/d' .env 2>/dev/null || true
+          echo "NODE_ENV=production" >> .env
+
+      - name: Rebuild containers
+        if: ${{ inputs.skip_build != true }}
+        run: |
+          cd /var/www/AIT-LMS
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+      - name: Wait for services
+        if: ${{ inputs.skip_build != true }}
+        run: sleep 30
+
+      - name: Run migrations
+        if: ${{ inputs.skip_build != true }}
+        run: |
+          cd /var/www/AIT-LMS
+          docker compose exec -T auth-service python manage.py migrate --noinput || true
+          docker compose exec -T course-service python manage.py migrate --noinput || true
+          docker compose exec -T admission-service python manage.py migrate --noinput || true
+
+      - name: Clear Redis lockouts & reset teacher passwords
+        if: ${{ inputs.skip_build != true }}
+        run: |
+          cd /var/www/AIT-LMS
+          echo "=== Clearing Redis login lockouts ==="
+          docker exec redis redis-cli EVAL "for _,k in ipairs(redis.call('keys', 'lockout_*')) do redis.call('del',k) end; for _,k in ipairs(redis.call('keys', 'attempts_*')) do redis.call('del',k) end; return 'done'" 0 || echo "No lockouts found or Redis not ready"
+
+          echo "=== Waiting for auth-service to be ready ==="
+          for i in $(seq 1 30); do
+            docker exec auth-service python -c "import django; django.setup(); from users.models import User; print('auth-service ready:', User.objects.count(), 'users')" 2>/dev/null && break
+            echo "  attempt $i/30 - auth-service not ready yet, waiting..."
+            sleep 3
+          done
+
+          echo "=== Resetting teacher passwords ==="
+          docker exec auth-service python seed_data/reset_teacher_passwords.py || echo "reset_teacher_passwords.py FAILED"
+
+      - name: Run full data seed pipeline
+        if: ${{ (github.event_name == 'push') || (inputs.skip_seed != true) }}
+        run: |
+          cd /var/www/AIT-LMS
+          bash scripts/seed_all.sh
+
+      - name: Verify lms-frontend and reload nginx
+        run: |
+          cd /var/www/AIT-LMS
+          echo "=== lms-frontend status ==="
+          docker compose ps lms-frontend
+          echo "=== lms-frontend logs ==="
+          docker compose logs lms-frontend --tail=20
+          echo "=== Reloading nginx ==="
+          docker exec nginx nginx -s reload || docker compose restart nginx

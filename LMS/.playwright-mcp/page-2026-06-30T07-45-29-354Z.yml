@@ -1,0 +1,115 @@
+- generic [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - complementary [ref=f5e5]:
+      - button [ref=f5e6] [cursor=pointer]:
+        - img [ref=f5e7]
+      - generic [ref=f5e9]:
+        - generic [ref=f5e10]:
+          - img "Logo" [ref=f5e12]
+          - generic [ref=f5e13]:
+            - heading "AIT LMS" [level=1] [ref=f5e14]
+            - paragraph [ref=f5e15]: Coordinator
+        - navigation [ref=f5e16]:
+          - generic [ref=f5e17]:
+            - button "Dashboard" [ref=f5e18] [cursor=pointer]:
+              - img [ref=f5e19]
+              - generic [ref=f5e24]:
+                - generic [ref=f5e25]: Dashboard
+                - img [ref=f5e26]
+            - button "Overview" [ref=f5e30] [cursor=pointer]:
+              - generic [ref=f5e31]: Overview
+          - generic [ref=f5e32]:
+            - button "Academic" [ref=f5e33] [cursor=pointer]:
+              - img [ref=f5e34]
+              - generic [ref=f5e37]:
+                - generic [ref=f5e38]: Academic
+                - img [ref=f5e39]
+            - generic:
+              - generic:
+                - button "Cert Generator" [ref=f5e41] [cursor=pointer]:
+                  - generic [ref=f5e42]: Cert Generator
+                - button "Certificates" [ref=f5e43] [cursor=pointer]:
+                  - generic [ref=f5e44]: Certificates
+                - button "Alumni Re-enrollment" [ref=f5e45] [cursor=pointer]:
+                  - generic [ref=f5e46]: Alumni Re-enrollment
+          - generic [ref=f5e47]:
+            - button "Finance & Admissions" [ref=f5e48] [cursor=pointer]:
+              - img [ref=f5e49]
+              - generic [ref=f5e52]:
+                - generic [ref=f5e53]: Finance & Admissions
+                - img [ref=f5e54]
+            - button "Student Transfers" [ref=f5e56] [cursor=pointer]:
+              - generic [ref=f5e57]: Student Transfers
+          - generic [ref=f5e58]:
+            - button "Management" [ref=f5e59] [cursor=pointer]:
+              - img [ref=f5e60]
+              - generic [ref=f5e65]:
+                - generic [ref=f5e66]: Management
+                - img [ref=f5e67]
+            - generic:
+              - generic:
+                - button "Teacher Attendance" [ref=f5e69] [cursor=pointer]:
+                  - generic [ref=f5e70]: Teacher Attendance
+                - button "Class Schedules" [ref=f5e71] [cursor=pointer]:
+                  - generic [ref=f5e72]: Class Schedules
+                - button "Sections" [ref=f5e73] [cursor=pointer]:
+                  - generic [ref=f5e74]: Sections
+        - button "Sign Out" [ref=f5e76] [cursor=pointer]:
+          - img [ref=f5e77]
+          - generic [ref=f5e80]: Sign Out
+    - generic [ref=f5e81]:
+      - banner [ref=f5e82]:
+        - generic [ref=f5e84]:
+          - img [ref=f5e85]
+          - textbox "Search teachers, schedules..." [ref=f5e88]
+          - generic [ref=f5e89]:
+            - generic [ref=f5e90]: ⌘
+            - generic [ref=f5e91]: K
+        - generic [ref=f5e92]:
+          - button [ref=f5e93] [cursor=pointer]:
+            - img [ref=f5e94]
+          - button "User Coordinator U" [ref=f5e99] [cursor=pointer]:
+            - generic [ref=f5e100]:
+              - paragraph [ref=f5e101]: User
+              - paragraph [ref=f5e102]: Coordinator
+            - generic [ref=f5e104]: U
+            - img [ref=f5e105]
+      - main [ref=f5e107]:
+        - generic [ref=f5e108]:
+          - generic [ref=f5e109]:
+            - generic [ref=f5e110]:
+              - paragraph [ref=f5e111]: ATTENDANCE
+              - heading "Mark Attendance" [level=1] [ref=f5e209]
+            - generic [ref=f5e114]:
+              - button "Review" [ref=f5e115] [cursor=pointer]
+              - button "Mark" [active] [ref=f5e116] [cursor=pointer]
+          - generic [ref=f5e212]:
+            - generic [ref=f5e213]:
+              - generic [ref=f5e214]: Course
+              - combobox [ref=f5e215]:
+                - option "Select Course"
+                - option "Web Development (MERN) Advance"
+                - option "AI & Data Science with Python Advance"
+                - option "Fundamentals(CIT) Level 0"
+                - option "Web Development (MERN) Beginner" [selected]
+                - option "Project Management Beginner"
+                - option "Digital Marketing Beginner"
+                - option "AI & Data Science with Python Beginner"
+                - 'option "Language: English Advance"'
+                - option "Game Development Beginner"
+                - option "Graphic Designing & Video Editing Advance"
+                - option "Digital Marketing Advance"
+                - option "Game Development Advance"
+                - option "dfdsfsfss"
+                - option "Cybersecurity Advance"
+                - option "Cybersecurity Beginner"
+                - 'option "Language: English Beginner"'
+                - option "Graphic Designing & Video Editing Beginner"
+            - generic [ref=f5e216]:
+              - generic [ref=f5e217]: Section
+              - combobox [ref=f5e218]:
+                - option "Select Section" [selected]
+            - generic [ref=f5e219]:
+              - generic [ref=f5e220]: Date
+              - textbox [ref=f5e221]: 2026-06-30
+  - alert [ref=f5e4]

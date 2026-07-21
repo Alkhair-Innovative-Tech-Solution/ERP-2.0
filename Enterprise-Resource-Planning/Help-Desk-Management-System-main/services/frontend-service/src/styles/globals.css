@@ -1,0 +1,367 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* SIS Color Palette - Exact Values */
+  --background: #e7ecef;           /* Main page background */
+  --primary-dark: #274c77;          /* Main text, headings */
+  --primary-medium: #365486;        /* Buttons, primary elements */
+  --primary-light: #6096ba;         /* Active sidebar items */
+  --accent-light: #a3cef1;          /* Sidebar closed, hover states */
+  --sidebar-open: #e7ecef;          /* Sidebar when open */
+  --sidebar-closed: #a3cef1;        /* Sidebar when closed */
+  --sidebar-border: #1c3f67;        /* Sidebar border */
+  --white: #ffffff;
+  --border-gray: #8b8c89;           /* Borders, muted text */
+  --destructive-red: #ef4444;       /* Delete, logout buttons */
+  
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 8px 32px 0 rgba(173, 208, 231, 0.74); /* Sidebar shadow */
+  --shadow-sidebar-closed: 0 2px 8px 0 rgba(163, 206, 241, 0.91);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--background);
+  color: var(--primary-dark);
+  font-family: 'Geist Sans', -apple-system, BlinkSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--primary-dark);
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.75rem; }
+h4 { font-size: 1.5rem; }
+h5 { font-size: 1.25rem; }
+h6 { font-size: 1rem; }
+
+p {
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+/* Global input, select, and textarea text color fix */
+input, select, textarea {
+  color: #111827 !important;
+  font-family: inherit;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+select option {
+  color: #111827 !important;
+  background-color: white;
+}
+
+/* Custom scrollbar - Professional Design */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--medium);
+  border-radius: 10px;
+  border: 2px solid var(--background);
+  transition: background var(--transition-base);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--medium) var(--background);
+}
+
+/* Focus styles - Professional */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* Remove default focus for mouse users */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Card hover effects - Enhanced */
+.card-hover {
+  transition: all var(--transition-slow);
+  cursor: pointer;
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+/* Professional animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-slow) ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn var(--transition-slow) ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-base) ease-out;
+}
+
+/* Professional button styles */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Link styles */
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--transition-base);
+}
+
+a:hover {
+  color: var(--medium);
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--light);
+  color: var(--primary);
+}
+
+::-moz-selection {
+  background-color: var(--light);
+  color: var(--primary);
+}
+
+/* Professional loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--medium) 100%);
+}
+
+.gradient-light {
+  background: linear-gradient(135deg, var(--light) 0%, var(--medium) 100%);
+}
+
+/* Professional shadows */
+.shadow-theme {
+  box-shadow: 0 4px 6px -1px rgba(39, 76, 119, 0.1), 0 2px 4px -1px rgba(39, 76, 119, 0.06);
+}
+
+.shadow-theme-lg {
+  box-shadow: 0 10px 15px -3px rgba(39, 76, 119, 0.1), 0 4px 6px -2px rgba(39, 76, 119, 0.05);
+}
+
+/* Prevent duplicate navigation bars */
+aside[class*="sidebar"],
+#mobile-sidebar {
+  position: fixed !important;
+}
+
+/* Ensure sidebar is always vertical */
+aside[class*="sidebar"] nav {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+}
+
+/* Prevent horizontal rendering of sidebar items */
+aside[class*="sidebar"] nav > * {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+}
+
+/* Ensure mobile sidebar is hidden by default */
+#mobile-sidebar.hidden {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Prevent duplicate headers on auth pages */
+[class*="login"] [class*="text-center"][class*="animate-slide-in"] {
+  position: relative !important;
+  z-index: 2 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Prevent duplicate light blue bars */
+[class*="login"] [class*="text-center"][class*="animate-slide-in"]::before,
+[class*="login"] [class*="text-center"][class*="animate-slide-in"]::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Ensure auth pages don't show layout components */
+body:has([class*="login"]) nav[class*="fixed"],
+body:has([class*="register"]) nav[class*="fixed"],
+body:has([class*="forgot-password"]) nav[class*="fixed"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+body:has([class*="login"]) aside[class*="sidebar"],
+body:has([class*="register"]) aside[class*="sidebar"],
+body:has([class*="forgot-password"]) aside[class*="sidebar"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Prevent duplicate headers on login page */
+[class*="login-page-wrapper"] > div:first-child {
+  position: relative !important;
+}
+
+[class*="login-header"] {
+  display: block !important;
+}
+
+/* Ensure only one header renders */
+[class*="login-header"]:not(:first-of-type) {
+  display: none !important;
+}
+
+/* SIS Animations */
+@keyframes fade-in {
+  from { 
+    opacity: 0; 
+    transform: translateY(-10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes shake-interval {
+  0%, 80% { transform: rotate(0deg); }
+  82% { transform: rotate(-16deg); }
+  84% { transform: rotate(16deg); }
+  86% { transform: rotate(-16deg); }
+  88% { transform: rotate(16deg); }
+  90% { transform: rotate(-16deg); }
+  92% { transform: rotate(16deg); }
+  96%, 100% { transform: rotate(0deg); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-shake-interval {
+  animation: shake-interval 6s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

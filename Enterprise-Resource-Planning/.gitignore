@@ -1,0 +1,58 @@
+
+# Submodules (handled by their own gitignores internally)
+# (do NOT ignore the directories themselves — they're submodules)
+
+# VMS — nested git repo, tracked separately
+VMS/                           
+                                                                                        
+# Secrets — only .env.example is committed
+.env
+.env.dev
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# JWT keys
+config/jwt_private.pem
+config/jwt_public.pem
+                                                                                        
+# Python
+__pycache__/                                                                                
+*.py[cod]       
+*$py.class
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.venv/                                                                                      
+venv/
+env/                                                                                        
+            
+# Node
+node_modules/
+.next/
+dist/
+build/                                                                                      
+
+# IDE / OS                                                                                  
+.DS_Store       
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/                                                                                    
+
+# Playwright / browser test artifacts                                                       
+.playwright-mcp/
+playwright-report/
+test-results/
+                                                                                        
+# Logs
+*.log                                                                                       
+logs/           
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+Leather@@AiT9211@420

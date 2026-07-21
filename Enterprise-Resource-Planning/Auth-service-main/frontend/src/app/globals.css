@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #2563eb;
+  --color-brand-secondary: #60a5fa;
+  --color-brand-dark: #1e293b;
+  --color-brand-sidebar: #ffffff;
+  
+  /* Custom App Theme Colors */
+  --color-theme-900: #001D39;
+  --color-theme-800: #0A4174;
+  --color-theme-600: #49769F;
+  --color-theme-500: #4E8EA2;
+  --color-theme-400: #6EA2B3;
+  --color-theme-300: #7BBDE8;
+  --color-theme-100: #BDD8E9;
+
+  /* Overriding default blue and indigo to match the new theme */
+  --color-blue-50: var(--color-theme-100);
+  --color-blue-100: var(--color-theme-100);
+  --color-blue-200: var(--color-theme-300);
+  --color-blue-300: var(--color-theme-300);
+  --color-blue-400: var(--color-theme-400);
+  --color-blue-500: var(--color-theme-500);
+  --color-blue-600: var(--color-theme-600);
+  --color-blue-700: var(--color-theme-800);
+  --color-blue-800: var(--color-theme-800);
+  --color-blue-900: var(--color-theme-900);
+
+  --color-indigo-50: var(--color-theme-100);
+  --color-indigo-100: var(--color-theme-100);
+  --color-indigo-200: var(--color-theme-300);
+  --color-indigo-300: var(--color-theme-300);
+  --color-indigo-400: var(--color-theme-400);
+  --color-indigo-500: var(--color-theme-500);
+  --color-indigo-600: var(--color-theme-600);
+  --color-indigo-700: var(--color-theme-800);
+  --color-indigo-800: var(--color-theme-800);
+  --color-indigo-900: var(--color-theme-900);
+}
+
+:root {
+  --background: #dfdddd;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --border: #f1f5f9;
+  --primary: #2d374e;
+  --primary-foreground: #ffffff;
+  --muted: #6b7280;
+  --muted-foreground: #6b7280;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #f8fafc;
+  --card: #18181b;
+  --card-foreground: #f8fafc;
+  --border: #27272a;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --muted: #a1a1aa;
+  --muted-foreground: #a1a1aa;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom UI Utilities */
+.glass-header {
+  @apply bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-10;
+}
+
+.dark .glass-header {
+  @apply bg-zinc-900/80 border-zinc-800;
+}
+
+.sidebar-link-active {
+  @apply bg-blue-50 text-blue-600 border-blue-100 shadow-sm font-semibold transition-all;
+}
+
+.dark .sidebar-link-active {
+  @apply bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-sm font-semibold transition-all;
+}
+
+.card-professional {
+  @apply bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300;
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background: rgb(189, 186, 186) !important;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Hide typical shared layouts/navs */
+  nav, aside, header, footer, .print-hidden {
+    display: none !important;
+  }
+
+  /* Reset layout for the ID card */
+  .fixed {
+    position: relative !important;
+    display: block !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+
+  .bg-white.w-full.max-w-xl, .bg-white.w-full.max-w-2xl {
+    box-shadow: none !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+  }
+}

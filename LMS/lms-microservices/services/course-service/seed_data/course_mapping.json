@@ -1,0 +1,98 @@
+{
+    "AI1": {
+        "id": "4266c93a-0e31-4afa-8929-39e76aa8e731",
+        "name": "AI & Data Science with Python Beginner",
+        "level": 1,
+        "specialization": "AI & Data Science with Python"
+    },
+    "AI2": {
+        "id": "ee91ef89-100a-4191-b8f5-4a16c9e9c331",
+        "name": "AI & Data Science with Python Advance",
+        "level": 2,
+        "specialization": "AI & Data Science with Python"
+    },
+    "CS1": {
+        "id": "a3082cb0-4d5a-4a0d-adcc-de035228b12f",
+        "name": "Cybersecurity Beginner",
+        "level": 1,
+        "specialization": "Cybersecurity"
+    },
+    "CS2": {
+        "id": "25bceaf5-10e1-4d6e-a46f-2a8e9c154896",
+        "name": "Cybersecurity Advance",
+        "level": 2,
+        "specialization": "Cybersecurity"
+    },
+    "DM1": {
+        "id": "19e8f33c-a019-4bb7-a104-57a8ce50f100",
+        "name": "Digital Marketing Beginner",
+        "level": 1,
+        "specialization": "Digital Marketing Specialization"
+    },
+    "DM2": {
+        "id": "c3b87e9d-dbf0-40ae-adeb-922a2da20ac9",
+        "name": "Digital Marketing Advance",
+        "level": 2,
+        "specialization": "Digital Marketing Specialization"
+    },
+    "CF0": {
+        "id": "75fe8586-e489-4fe0-8c47-65aaf5119ee8",
+        "name": "Fundamentals(CIT) Level 0",
+        "level": 1,
+        "specialization": "Fundamentals (CIT)"
+    },
+    "GD1": {
+        "id": "40d1e231-0e4d-4f1c-bce7-ccdd45035fe0",
+        "name": "Game Development Beginner",
+        "level": 1,
+        "specialization": "Game Development"
+    },
+    "GD2": {
+        "id": "b9857d0e-1271-4ae8-a933-f36747e6cfe7",
+        "name": "Game Development Advance",
+        "level": 2,
+        "specialization": "Game Development"
+    },
+    "GC1": {
+        "id": "4c76ebd1-ef6b-42b8-bcc2-1b0c280bfdbb",
+        "name": "Graphic Designing & Video Editing Beginner",
+        "level": 1,
+        "specialization": "Graphic Designing & Video Editing"
+    },
+    "GC2": {
+        "id": "76733336-c961-4740-b07e-98cdd634c76d",
+        "name": "Graphic Designing & Video Editing Advance",
+        "level": 2,
+        "specialization": "Graphic Designing & Video Editing"
+    },
+    "LE1": {
+        "id": "4772b4cd-39a3-4613-a673-826150b187cc",
+        "name": "Language: English Beginner",
+        "level": 1,
+        "specialization": "Language: English"
+    },
+    "LE2": {
+        "id": "8ccd0da0-bb27-4550-8a7c-d80e81a3142d",
+        "name": "Language: English Advance",
+        "level": 2,
+        "specialization": "Language: English"
+    },
+    "PM1": {
+        "id": "bede11c2-0b49-456f-bca9-4d93d3ba9523",
+        "name": "Project Management Beginner",
+        "level": 1,
+        "specialization": "Project Management"
+    },
+    "WD1": {
+        "id": "b3ef54d7-27bf-46a1-aa69-15ce84485fb2",
+        "name": "Web Development (MERN) Beginner",
+        "level": 1,
+        "specialization": "Web Development (MERN)"
+    },
+    "WD2": {
+        "id": "5ddf01bf-bdd3-4aeb-a7da-bb04f20ce6ae",
+        "name": "Web Development (MERN) Advance",
+        "level": 2,
+        "specialization": "Web Development (MERN)"
+    }
+}

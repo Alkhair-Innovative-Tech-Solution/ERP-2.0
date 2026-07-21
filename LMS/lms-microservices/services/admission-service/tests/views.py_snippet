@@ -1,0 +1,28 @@
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .models import UserTestSelection
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_tests(request):
+    """
+    Retrieve tests assigned to the authenticated user.
+    """
+    try:
+        selections = UserTestSelection.objects.filter(user_id=request.user.id)
+        data = []
+        for s in selections:
+            test_name = f"Test for Course {s.course_id}"
+            data.append({
+                "id": str(s.id),
+                "test": test_name,
+                "test_id": str(s.test.id),
+                "user": str(s.user_id),
+                "test_attempted": s.test_attempted,
+                "status": s.status
+            })
+        return Response(data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)

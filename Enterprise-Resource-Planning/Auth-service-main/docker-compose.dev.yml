@@ -1,0 +1,21 @@
+# =============================================
+# LOCAL DEV OVERRIDE — do not deploy to prod
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d auth-service
+# Frontend: run natively with `cd frontend && npm run dev`
+# =============================================
+
+services:
+  auth-service:
+    env_file:
+      - ../.env.dev    # dev credentials — bypasses pgbouncer, DEBUG=True
+    ports:
+      - "8000:8000"
+
+  auth-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    ports:
+      - "3005:3000"

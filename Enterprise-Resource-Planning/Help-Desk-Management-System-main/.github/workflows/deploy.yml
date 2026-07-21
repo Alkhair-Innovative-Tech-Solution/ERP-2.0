@@ -1,0 +1,88 @@
+name: Deploy HDMS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd /var/www/erp_new/HDMS
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/fun33333/HDMS.git"
+
+          OLD_HEAD=$(git rev-parse HEAD)
+          git pull origin main
+          NEW_HEAD=$(git rev-parse HEAD)
+
+          if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
+            echo "Nothing changed, skipping deploy"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$OLD_HEAD" "$NEW_HEAD")
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          BUILD_SERVICES=""
+          RESTART_SERVICES=""
+
+          # Ticket service
+          if echo "$CHANGED" | grep -q "^services/ticket-service/"; then
+            BUILD_SERVICES="$BUILD_SERVICES ticket-service"
+          fi
+
+          # Communication service
+          if echo "$CHANGED" | grep -q "^services/communication-service/"; then
+            BUILD_SERVICES="$BUILD_SERVICES communication-service"
+          fi
+
+          # File service + celery worker (share same image)
+          if echo "$CHANGED" | grep -q "^services/file-service/"; then
+            BUILD_SERVICES="$BUILD_SERVICES file-service celery-worker-files"
+          fi
+
+          # Frontend service
+          if echo "$CHANGED" | grep -q "^services/frontend-service/"; then
+            BUILD_SERVICES="$BUILD_SERVICES frontend-service"
+          fi
+
+          # Shared lib — volume-mounted, restart backend services (no rebuild needed)
+          if echo "$CHANGED" | grep -q "^services/shared/"; then
+            RESTART_SERVICES="ticket-service communication-service file-service"
+          fi
+
+          # docker-compose change — restart all
+          if echo "$CHANGED" | grep -q "^docker-compose"; then
+            BUILD_SERVICES="ticket-service communication-service file-service celery-worker-files frontend-service"
+          fi
+
+          # Build changed services (uses Docker layer cache)
+          if [ -n "$BUILD_SERVICES" ]; then
+            echo "Building:$BUILD_SERVICES"
+            docker compose build $BUILD_SERVICES
+            docker compose up -d $BUILD_SERVICES
+          fi
+
+          # Restart services that need config reload (shared lib, etc.)
+          if [ -n "$RESTART_SERVICES" ]; then
+            echo "Restarting:$RESTART_SERVICES"
+            docker compose restart $RESTART_SERVICES
+          fi
+
+          # collectstatic only for rebuilt backend services
+          if echo "$BUILD_SERVICES" | grep -q "ticket-service"; then
+            docker exec hdms-ticket-service python manage.py collectstatic --noinput || true
+          fi
+          if echo "$BUILD_SERVICES" | grep -q "communication-service"; then
+            docker exec hdms-communication-service python manage.py collectstatic --noinput || true
+          fi
+          if echo "$BUILD_SERVICES" | grep -q "file-service"; then
+            docker exec hdms-file-service python manage.py collectstatic --noinput || true
+          fi
+
+          echo "HDMS deployed successfully"

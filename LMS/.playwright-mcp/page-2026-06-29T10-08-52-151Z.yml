@@ -1,0 +1,849 @@
+- generic [ref=e83]:
+  - generic [ref=e86]:
+    - generic [ref=e87]:
+      - button "AITS - Q & A, , AITS - Q & A" [ref=e89] [cursor=pointer]:
+        - generic "AITS - Q & A, ," [ref=e91]:
+          - generic [ref=e92]: A
+        - generic [ref=e93]: AITS - Q & A
+        - img [ref=e95]
+      - button [ref=e100] [cursor=pointer]:
+        - img [ref=e101]
+    - generic [ref=e104]:
+      - button "Search Ctrl K" [ref=e105] [cursor=pointer]:
+        - img [ref=e107]
+        - generic [ref=e109]: Search
+        - generic [ref=e110]: Ctrl K
+      - button "Lottie animation AI Chats" [ref=e111] [cursor=pointer]:
+        - img "Lottie animation" [ref=e115]:
+          - img [ref=e117]
+        - generic [ref=e150]: AI Chats
+    - generic [ref=e151]:
+      - generic [ref=e154]:
+        - button "Create task" [ref=e155] [cursor=pointer]:
+          - img [ref=e157]
+        - button "Dropdown menu" [ref=e162] [cursor=pointer]:
+          - button "Record a Clip" [ref=e163]:
+            - img [ref=e165]
+        - button "Dropdown menu" [ref=e169] [cursor=pointer]:
+          - img [ref=e171]
+      - button "Dropdown menu" [ref=e175] [cursor=pointer]:
+        - generic "Rao Faizan Raza, , online" [ref=e178]:
+          - generic [ref=e179]: RR
+          - img [ref=e181]
+        - img [ref=e184]
+  - generic [ref=e190]:
+    - navigation "Sidebar" [ref=e192]:
+      - generic [ref=e193]:
+        - generic [ref=e194]:
+          - generic [ref=e195]:
+            - link "Home" [ref=e199] [cursor=pointer]:
+              - /url: https://app.clickup.com/90182816660/inbox
+              - img [ref=e203]
+              - generic [ref=e208]: Home
+              - note [ref=e211]:
+                - generic [ref=e212]: "1"
+            - generic [ref=e213]:
+              - link "Planner 29" [ref=e216] [cursor=pointer]:
+                - /url: https://app.clickup.com/90182816660/calendar
+                - generic [ref=e217]:
+                  - img [ref=e221]
+                  - generic [ref=e226]: Planner
+                  - generic [ref=e228]:
+                    - generic: "29"
+              - link "AI" [ref=e231] [cursor=pointer]:
+                - /url: https://app.clickup.com/90182816660/ai
+                - generic [ref=e232]:
+                  - img [ref=e236]
+                  - generic [ref=e241]: AI
+              - link "Teams" [ref=e245] [cursor=pointer]:
+                - /url: https://app.clickup.com/90182816660/teams-pulse
+                - generic [ref=e246]:
+                  - img [ref=e250]
+                  - generic [ref=e255]: Teams
+          - button "Dropdown menu" [ref=e258] [cursor=pointer]:
+            - img [ref=e260]
+            - generic [ref=e262]:
+              - img [ref=e266]
+              - img [ref=e271]
+              - img [ref=e276]
+              - img [ref=e279]
+            - generic [ref=e284]: More
+        - button "Invite" [ref=e293] [cursor=pointer]:
+          - img [ref=e295]
+          - generic [ref=e297]: Invite
+    - main [ref=e298]:
+      - generic [ref=e300]:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic: Home
+                        - generic:
+                          - link "Number of unseen notifications":
+                            - /url: https://app.clickup.com/90182816660/inbox?tab=primary
+                            - generic:
+                              - generic:
+                                - note:
+                                  - generic: "1"
+                                - generic: Number of unseen notifications
+                            - generic:
+                              - img
+                          - generic:
+                            - generic:
+                              - textbox "Search sidebar..."
+                              - generic:
+                                - img
+                          - generic:
+                            - button:
+                              - generic:
+                                - img
+                          - generic:
+                            - button "Close sidebar":
+                              - generic:
+                                - img
+                          - button "Create":
+                            - button "Create":
+                              - generic:
+                                - img
+                              - generic: Create
+                              - generic:
+                                - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - tree:
+                              - treeitem [level=1]
+                              - treeitem "Inbox 1" [level=1]:
+                                - generic:
+                                  - link "Inbox 1":
+                                    - /url: https://app.clickup.com/90182816660/inbox?tab=primary
+                                    - generic:
+                                      - img
+                                    - generic: Inbox
+                                    - generic:
+                                      - generic: "1"
+                              - treeitem "Replies" [level=1]:
+                                - generic:
+                                  - link "Replies":
+                                    - /url: https://app.clickup.com/90182816660/chat/r/threads
+                                    - generic:
+                                      - img
+                                    - generic: Replies
+                              - treeitem "Assigned Comments" [level=1]:
+                                - generic:
+                                  - link "Assigned Comments":
+                                    - /url: https://app.clickup.com/90182816660/chat/r/assigned
+                                    - generic:
+                                      - img
+                                    - generic: Assigned Comments
+                              - treeitem "My Tasks 1" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - img
+                                    - link "My Tasks 1":
+                                      - /url: https://app.clickup.com/90182816660/my-work
+                                      - generic:
+                                        - generic: My Tasks
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - img
+                                            - generic: "1"
+                              - treeitem "More" [level=1]:
+                                - generic:
+                                  - button "More":
+                                    - generic:
+                                      - img
+                                    - generic: More
+                              - treeitem [level=1]
+                              - treeitem "AI Chats" [expanded] [level=1]:
+                                - generic:
+                                  - generic:
+                                    - button "AI Chats":
+                                      - generic: AI Chats
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - generic:
+                                              - img
+                              - treeitem "Ask, Build, Create" [level=2]:
+                                - generic:
+                                  - link "Ask, Build, Create":
+                                    - /url: https://app.clickup.com/90182816660/ai/brain?sidebar=home
+                                    - generic:
+                                      - img
+                                    - generic: Ask, Build, Create
+                              - treeitem [level=1]
+                              - treeitem "Spaces Spaces settings" [expanded] [level=1]:
+                                - generic:
+                                  - generic:
+                                    - button "Spaces":
+                                      - generic: Spaces
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - button "Spaces settings":
+                                              - generic:
+                                                - img
+                                              - generic: Spaces settings
+                                        - generic:
+                                          - button:
+                                            - generic:
+                                              - img
+                              - treeitem "All Tasks - AITS - Q & A" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - img
+                                    - link "All Tasks - AITS - Q & A":
+                                      - /url: https://app.clickup.com/90182816660/v/t/90182816660
+                                      - generic: All Tasks - AITS - Q & A
+                              - treeitem "Cupcakes and Pickles, , Cupcakes and Pickles" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic "Cupcakes and Pickles, ,":
+                                            - generic: C
+                                    - link "Cupcakes and Pickles":
+                                      - /url: https://app.clickup.com/90182816660/v/s/901811578804
+                                      - generic:
+                                        - generic: Cupcakes and Pickles
+                              - treeitem "AITS, , AITS" [expanded] [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic "AITS, ,":
+                                            - generic: A
+                                    - link "AITS":
+                                      - /url: https://app.clickup.com/90182816660/v/s/901811579003
+                                      - generic:
+                                        - generic: AITS
+                                    - generic:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                              - treeitem "Project Board 47" [level=3]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                    - link "Project Board":
+                                      - /url: https://app.clickup.com/90182816660/v/li/901819057575/901814862167?pr=901811579003
+                                      - generic:
+                                        - generic: Project Board
+                                    - generic: "47"
+                              - treeitem "New Space" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - img
+                                    - generic:
+                                      - generic:
+                                        - generic: New Space
+                              - treeitem [level=1]
+                              - treeitem "Direct Messages" [expanded] [level=1]:
+                                - generic:
+                                  - generic:
+                                    - button "Direct Messages":
+                                      - generic: Direct Messages
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - generic:
+                                              - img
+                                        - generic:
+                                          - button:
+                                            - generic:
+                                              - img
+                              - treeitem "Muhammad Nafees, , online Muhammad Nafees" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic "Muhammad Nafees, , online":
+                                                      - generic: M
+                                                      - generic:
+                                                        - generic:
+                                                          - img
+                                    - link "Muhammad Nafees":
+                                      - /url: https://app.clickup.com/90182816660/chat/r/2kzn14wm-1098
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: Muhammad Nafees
+                              - treeitem "Ahad Ahmed, , online Ahad Ahmed" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic "Ahad Ahmed, , online":
+                                                      - generic: A
+                                                      - generic:
+                                                        - generic:
+                                                          - img
+                                    - link "Ahad Ahmed":
+                                      - /url: https://app.clickup.com/90182816660/chat/r/2kzn14wm-1118
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: Ahad Ahmed
+                              - treeitem "Maryam Irshad, , online Maryam Irshad" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic "Maryam Irshad, , online":
+                                                      - generic: M
+                                                      - generic:
+                                                        - generic:
+                                                          - img
+                                    - link "Maryam Irshad":
+                                      - /url: https://app.clickup.com/90182816660/chat/r/2kzn14wm-1138
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: Maryam Irshad
+                              - treeitem "Abdul Mateen, , online Abdul Mateen" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic "Abdul Mateen, , online":
+                                                      - generic: A
+                                                      - generic:
+                                                        - generic:
+                                                          - img
+                                    - link "Abdul Mateen":
+                                      - /url: https://app.clickup.com/90182816660/chat/r/2kzn14wm-1078
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: Abdul Mateen
+                              - treeitem "Rao Faizan Raza, , online Rao Faizan Raza — You" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic "Rao Faizan Raza, , online":
+                                                      - generic: R
+                                                      - generic:
+                                                        - generic:
+                                                          - img
+                                    - link "Rao Faizan Raza — You":
+                                      - /url: https://app.clickup.com/90182816660/chat/r/2kzn14wm-1058
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: Rao Faizan Raza
+                                            - generic: — You
+                              - treeitem "New message" [level=2]:
+                                - generic:
+                                  - link "New message":
+                                    - /url: https://app.clickup.com/90182816660/chat/r/launchpad
+                                    - generic:
+                                      - img
+                                    - generic: New message
+                              - treeitem [level=1]
+                              - treeitem "Channels" [expanded] [level=1]:
+                                - generic:
+                                  - generic:
+                                    - button "Channels":
+                                      - generic: Channels
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - generic:
+                                              - img
+                                        - generic:
+                                          - button:
+                                            - generic:
+                                              - img
+                              - treeitem "AITS - Q & A, , General - AITS - Q & A" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - img
+                                                      - generic:
+                                                        - generic:
+                                                          - generic "AITS - Q & A, ,":
+                                                            - generic: A
+                                    - link "General - AITS - Q & A":
+                                      - /url: https://app.clickup.com/90182816660/v/cn/7-90182816660-8
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: General
+                                          - generic: "- AITS - Q & A"
+                              - treeitem "Welcome" [level=2]:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - img
+                                    - link "Welcome":
+                                      - /url: https://app.clickup.com/90182816660/chat/r/2kzn14wm-58
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic: Welcome
+                              - treeitem "Add Channel" [level=2]:
+                                - generic:
+                                  - link "Add Channel":
+                                    - /url: https://app.clickup.com/90182816660/chat/r/channels
+                                    - generic:
+                                      - img
+                                    - generic: Add Channel
+                              - treeitem [level=1]
+                              - treeitem [level=1]
+                        - generic:
+                          - generic:
+                            - button "Space settings"
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - button "Folder settings"
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - button "List settings"
+                        - generic:
+                          - generic:
+                            - button "Dropdown menu"
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - button
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button "Unread messages":
+                                      - img
+                                      - generic: Unread messages
+                        - generic:
+                          - generic:
+                            - button "Customize Sidebar":
+                              - generic:
+                                - img
+                              - generic: Customize Sidebar
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - link "AITS, , AITS":
+                                  - /url: https://app.clickup.com/90182816660/v/s/901811579003/1
+                                  - generic:
+                                    - generic "AITS, ,":
+                                      - generic: A
+                                  - generic: AITS
+                              - generic: /
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button "Dropdown menu":
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - img
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic: Project Board
+                                      - generic:
+                                        - img
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - button "Project Board List settings"
+                            - generic:
+                              - generic:
+                                - button "Dropdown menu":
+                                  - generic:
+                                    - img
+                                  - generic: Favorite
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button "Add description":
+                                      - generic:
+                                        - img
+                                      - generic: Add description
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - button "Add List assignee":
+                                        - generic:
+                                          - generic:
+                                            - button "Add List assignee":
+                                              - generic:
+                                                - img
+                                              - generic: Add List assignee
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - button "Add List priority":
+                                        - generic:
+                                          - generic:
+                                            - button "Add List priority":
+                                              - generic:
+                                                - img
+                                              - generic: Add List priority
+                                      - generic: Change priority
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - button "Add List dates":
+                                        - generic:
+                                          - button "Add List dates":
+                                            - generic:
+                                              - img
+                                            - generic: Add List dates
+                                      - generic: Change start and due dates
+                        - generic:
+                          - generic:
+                            - generic:
+                              - button "SyncUp in Project Board":
+                                - generic:
+                                  - img
+                              - button:
+                                - generic:
+                                  - img
+                          - generic:
+                            - generic:
+                              - button "Dropdown menu":
+                                - generic:
+                                  - button "Agents":
+                                    - generic:
+                                      - img
+                                    - generic:
+                                      - generic: Agents
+                          - generic:
+                            - generic:
+                              - button "Dropdown menu":
+                                - generic:
+                                  - button "2":
+                                    - generic:
+                                      - generic:
+                                        - img
+                                    - text: "2"
+                          - generic:
+                            - generic:
+                              - button "Share":
+                                - generic:
+                                  - img
+                                - generic: Share
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic [ref=e302]:
+                                - link [ref=e303] [cursor=pointer]:
+                                  - /url: https://app.clickup.com/90182816660/v/cn/6-901819057575-8
+                                  - img [ref=e309]
+                                - link "Channel" [ref=e311] [cursor=pointer]:
+                                  - /url: https://app.clickup.com/90182816660/v/cn/6-901819057575-8
+                                  - generic [ref=e313]: Channel
+                              - generic:
+                                - generic [ref=e315]:
+                                  - link [ref=e316] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/b/2kzn14wm-298
+                                    - generic [ref=e317]:
+                                      - img [ref=e322]
+                                      - img [ref=e325]
+                                  - link "Board" [ref=e327] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/b/2kzn14wm-298
+                                    - generic [ref=e329]: Board
+                                - generic [ref=e331]:
+                                  - link [ref=e332] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/l/2kzn14wm-278
+                                    - generic [ref=e333]:
+                                      - img [ref=e338]
+                                      - img [ref=e341]
+                                  - link "List" [ref=e343] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/l/2kzn14wm-278
+                                    - generic [ref=e345]: List
+                                - generic [ref=e347]:
+                                  - link [ref=e348] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/c/2kzn14wm-258
+                                    - generic [ref=e349]:
+                                      - img [ref=e354]
+                                      - img [ref=e357]
+                                  - link "Calendar" [ref=e359] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/c/2kzn14wm-258
+                                    - generic [ref=e361]: Calendar
+                              - generic:
+                                - generic [ref=e363]:
+                                  - link [ref=e364] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/x/li/901819057575
+                                    - img [ref=e370]
+                                  - link "Team" [ref=e372] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/x/li/901819057575
+                                    - generic [ref=e374]: Team
+                                - generic [ref=e376]:
+                                  - link [ref=e377] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/wl/6-901819057575-18
+                                    - img [ref=e383]
+                                  - link "Workload" [ref=e385] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/wl/6-901819057575-18
+                                    - generic [ref=e387]: Workload
+                                - generic [ref=e389]:
+                                  - link [ref=e390] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/g/2kzn14wm-318
+                                    - img [ref=e396]
+                                  - link "Gantt" [ref=e398] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/g/2kzn14wm-318
+                                    - generic [ref=e400]: Gantt
+                                - generic [ref=e402]:
+                                  - link [ref=e403] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/tl/6-901819057575-16
+                                    - img [ref=e409]
+                                  - link "Timeline" [ref=e411] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/tl/6-901819057575-16
+                                    - generic [ref=e413]: Timeline
+                                - generic [ref=e415]:
+                                  - link [ref=e416] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/a/6-901819057575-17
+                                    - img [ref=e422]
+                                  - link "Activity" [ref=e424] [cursor=pointer]:
+                                    - /url: https://app.clickup.com/90182816660/v/a/6-901819057575-17
+                                    - generic [ref=e426]: Activity
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button "View Add View":
+                                      - generic:
+                                        - button "View Add View":
+                                          - generic:
+                                            - img
+                                          - generic: View
+                                          - generic: Add View
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - button "Subtasks":
+                                    - generic:
+                                      - img
+                                    - generic: "Subtasks: Collapsed"
+                                    - generic: Subtasks
+                                - generic:
+                                  - generic:
+                                    - button "Dropdown menu":
+                                      - generic:
+                                        - button "Task Name":
+                                          - generic:
+                                            - img
+                                          - generic: Sorting by Task Name
+                                          - generic: Task Name
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - button "Filter":
+                                        - generic:
+                                          - button "Filter":
+                                            - generic:
+                                              - img
+                                            - generic: Filter
+                                - generic:
+                                  - button "Assignee":
+                                    - generic:
+                                      - img
+                                    - generic: Assignee
+                                - generic:
+                                  - button "Rao Faizan Raza, ,":
+                                    - generic:
+                                      - generic "Rao Faizan Raza, ,":
+                                        - generic: R
+                            - generic:
+                              - generic:
+                                - button:
+                                  - generic:
+                                    - img
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - textbox "Search..."
+                                  - button "Search settings":
+                                    - generic:
+                                      - img
+                            - button "Customize":
+                              - generic:
+                                - img
+                              - generic: Customize
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button "Add Task":
+                                      - generic: Add Task
+                                    - generic:
+                                      - button "Choose task type":
+                                        - button:
+                                          - generic:
+                                            - img
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - heading "Your Team view uses have expired." [level=3]
+                          - paragraph:
+                            - link "Contact admin":
+                              - /url: mailto:nauman.noor@iak.ngo?subject=Request%20to%20Upgrade%20ClickUp%20Plan&body=Hi%2C%0A%0AOur%20team%20needs%20Team%20View%20in%20ClickUp%2C%20and%20we've%20reached%20some%20of%20the%20limits%20of%20the%20Free%20Forever%20Plan.%20Have%20we%20considered%20upgrading%3F%0A%0AThank%20you!
+  - dialog [ref=e429]:
+    - generic [ref=e432]:
+      - generic [ref=e434]:
+        - button [ref=e435] [cursor=pointer]:
+          - img [ref=e437]
+        - generic [ref=e440]:
+          - generic [ref=e441]: That feature isn't available on your current plan
+          - generic [ref=e442]: Try Business for FREE to unlock Team View
+      - generic [ref=e445]:
+        - generic [ref=e448]:
+          - heading "Team View" [level=1] [ref=e449]
+          - generic [ref=e450]: View everyone's tasks, track their goals, and visually manage their capacity.
+          - list [ref=e451]:
+            - listitem [ref=e452]: • View real-time team tasks and progress.
+            - listitem [ref=e453]: • Manage resources and workload efficiently.
+            - listitem [ref=e454]: • Use drag-and-drop to balance workloads and prevent overload.
+        - generic [ref=e455]:
+          - generic [ref=e457]:
+            - generic [ref=e458]:
+              - heading "Business" [level=2] [ref=e459]
+              - generic [ref=e460]: Popular
+            - heading "Try FREE for 15 days No credit card required!" [level=4] [ref=e461]:
+              - text: Try FREE for 15 days
+              - text: No credit card required!
+            - generic [ref=e462]:
+              - heading "$12" [level=1] [ref=e463]
+              - generic [ref=e464]:
+                - generic [ref=e465]: member
+                - generic [ref=e466]: per month
+            - button "Contact your admin" [ref=e468] [cursor=pointer]
+          - generic [ref=e469]:
+            - generic [ref=e471]:
+              - img [ref=e473]
+              - generic [ref=e475]: Unlimited Storage
+            - generic [ref=e477]:
+              - img [ref=e479]
+              - generic [ref=e481]: Unlimited Activity views
+            - generic [ref=e483]:
+              - img [ref=e485]
+              - generic [ref=e487]: Unlimited Tasks in Multiple Lists
+            - generic [ref=e489]:
+              - img [ref=e491]
+              - generic [ref=e493]: Unlimited Private Whiteboards
+            - generic [ref=e495]:
+              - img [ref=e497]
+              - generic [ref=e499]: Two-Factor Authentication
+            - generic [ref=e501]:
+              - img [ref=e503]
+              - generic [ref=e505]: Google SSO
+            - generic [ref=e507]:
+              - img [ref=e509]
+              - generic [ref=e511]: Custom Exporting
+            - generic [ref=e513]:
+              - img [ref=e515]
+              - generic [ref=e517]: Workload View
+            - generic [ref=e519]:
+              - img [ref=e521]
+              - generic [ref=e523]: Automation Integrations
+            - generic [ref=e525]:
+              - img [ref=e527]
+              - generic [ref=e529]: 10 Guests + 5 extra per paid user
+  - generic:
+    - generic:
+      - generic:
+        - status
+    - generic:
+      - generic:
+        - status

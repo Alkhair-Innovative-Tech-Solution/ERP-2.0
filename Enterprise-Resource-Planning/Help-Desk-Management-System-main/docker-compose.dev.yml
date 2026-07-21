@@ -1,0 +1,43 @@
+
+# Development overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  user-service:
+    volumes:
+      - ./services/user-service/src:/app
+    environment:
+      - DEBUG=True
+    command: python manage.py runserver 0.0.0.0:8001
+
+  ticket-service:
+    volumes:
+      - ./services/ticket-service/src:/app
+    environment:
+      - DEBUG=True
+    command: python manage.py runserver 0.0.0.0:8002
+
+  communication-service:
+    volumes:
+      - ./services/communication-service/src:/app
+    environment:
+      - DEBUG=True
+    command: daphne -b 0.0.0.0 -p 8003 core.asgi:application
+
+  file-service:
+    volumes:
+      - ./services/file-service/src:/app
+    environment:
+      - DEBUG=True
+    command: python manage.py runserver 0.0.0.0:8005
+
+  frontend-service:
+    volumes:
+      - ./services/frontend-service:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+
+

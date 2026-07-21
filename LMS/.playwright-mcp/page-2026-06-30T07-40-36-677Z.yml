@@ -1,0 +1,97 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - navigation [ref=e4]:
+        - generic [ref=e6]:
+          - link "Idara Al-Khair" [ref=e7] [cursor=pointer]:
+            - /url: /
+            - img "Idara Al-Khair" [ref=e9]
+          - generic [ref=e10]:
+            - link "About us" [ref=e11] [cursor=pointer]:
+              - /url: /about
+              - generic [ref=e12]: About us
+            - link "Contact" [ref=e13] [cursor=pointer]:
+              - /url: /contact
+              - generic [ref=e14]: Contact
+            - link "Courses" [ref=e15] [cursor=pointer]:
+              - /url: /courses
+              - generic [ref=e16]: Courses
+            - button "How To" [ref=e18] [cursor=pointer]:
+              - generic [ref=e19]: How To
+              - img [ref=e20]
+          - generic [ref=e22]:
+            - button [ref=e23] [cursor=pointer]:
+              - img [ref=e24]
+            - link "Register" [ref=e30] [cursor=pointer]:
+              - /url: /register
+              - button "Register" [ref=e31]
+      - generic [ref=e32]:
+        - generic [ref=e36]:
+          - img "Sparkles icon" [ref=e37]
+          - heading "Discover Your Path to Success" [level=1] [ref=e39]
+          - paragraph [ref=e41]: Explore our comprehensive range of tech courses designed to transform your career
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - img [ref=e46]
+            - textbox "Search specializations" [ref=e49]:
+              - /placeholder: Search specializations...
+          - list "Specializations" [ref=e50]:
+            - generic [ref=e51]:
+              - heading "Available Now" [level=4] [ref=e52]: Available Now
+              - list "Available specializations"
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - generic [ref=e83]:
+              - link "Idara Al-Khair" [ref=e84] [cursor=pointer]:
+                - /url: /
+                - img "Idara Al-Khair" [ref=e86]
+              - paragraph [ref=e87]: Serving humanity since 1987 – we're here to help and make the world a better place, one step at a time!
+              - link "Find Us on the Map" [ref=e88] [cursor=pointer]:
+                - /url: /contact
+                - generic [ref=e89]: Find Us on the Map
+                - img [ref=e90]
+              - img "QR Scan" [ref=e93]
+            - generic [ref=e94]:
+              - heading "Let's Talk!" [level=2] [ref=e95]
+              - list [ref=e96]:
+                - listitem [ref=e97]:
+                  - img [ref=e99]
+                  - generic [ref=e101]: A 507, Sector 11-A ,Near Power House Chorangi, North Karachi, Karachi, Pakistan
+                - listitem [ref=e102]:
+                  - img [ref=e104]
+                  - generic [ref=e106]: "02136950309"
+                - listitem [ref=e107]:
+                  - img [ref=e109]
+                  - generic [ref=e111]: AIT.info@iak.ngo
+                - listitem [ref=e112]:
+                  - img [ref=e114]
+                  - generic [ref=e116]: +92 333 2336203
+            - generic [ref=e117]:
+              - heading "Quick Links" [level=2] [ref=e118]
+              - list [ref=e119]:
+                - listitem [ref=e120]:
+                  - link "Home" [ref=e121] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e122]:
+                  - link "About Us" [ref=e123] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e124]:
+                  - link "Schools That Rock" [ref=e125] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e126]:
+                  - link "Our Projects" [ref=e127] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e128]:
+                  - link "Gallery of Wonders" [ref=e129] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e130]:
+                  - link "Get in Touch!" [ref=e131] [cursor=pointer]:
+                    - /url: "#"
+            - generic [ref=e132]:
+              - heading "Fresh News! 🍞" [level=2] [ref=e133]
+              - list [ref=e134]:
+                - listitem [ref=e135] [cursor=pointer]: "Exciting News: The IAK IT Institute is Here! 🚀"
+                - listitem [ref=e136] [cursor=pointer]: Join Our Newsletter and Stay Updated! 📰
+          - separator [ref=e137]
+          - paragraph [ref=e139]: © 1987 - 2025 All rights reserved | Idara Al-Khair – Your welfare, our priority!
+  - alert [ref=e140]

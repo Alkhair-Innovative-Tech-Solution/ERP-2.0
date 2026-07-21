@@ -1,0 +1,92 @@
+{
+    "CF0": {
+        "id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "name": "Fundamentals(CIT) Level 0",
+        "level": 1,
+        "specialization": "Fundamentals (CIT)"
+    },
+    "GC1": {
+        "id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "name": "Graphic Designing & Video Editing Beginner",
+        "level": 1,
+        "specialization": "Graphic Designing & Video Editing"
+    },
+    "WD1": {
+        "id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "name": "Web Development (MERN) Beginner",
+        "level": 1,
+        "specialization": "Web Development (MERN)"
+    },
+    "DM1": {
+        "id": "92cda1fa-c182-45df-97d7-374d06cd0a10",
+        "name": "Digital Marketing Beginner",
+        "level": 1,
+        "specialization": "Digital Marketing Specialization"
+    },
+    "CS1": {
+        "id": "ebf4535e-5c7f-43ec-bed3-476feaacca96",
+        "name": "Cybersecurity Beginner",
+        "level": 1,
+        "specialization": "Cybersecurity"
+    },
+    "LE1": {
+        "id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "name": "Language: English Beginner",
+        "level": 1,
+        "specialization": "Language: English"
+    },
+    "AI1": {
+        "id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "name": "AI & Data Science with Python Beginner",
+        "level": 1,
+        "specialization": "AI & Data Science with Python"
+    },
+    "GC2": {
+        "id": "b0d93394-a4e5-4f91-a76d-b039f2af864b",
+        "name": "Graphic Designing & Video Editing Advance",
+        "level": 2,
+        "specialization": "Graphic Designing & Video Editing"
+    },
+    "GD1": {
+        "id": "6bdfaead-29a3-4ceb-9ccb-11e37ccbe526",
+        "name": "Game Development Beginner",
+        "level": 1,
+        "specialization": "Game Development"
+    },
+    "AI2": {
+        "id": "f01459e6-53c9-4ac8-95e4-1621c276fe2a",
+        "name": "AI & Data Science with Python Advance",
+        "level": 2,
+        "specialization": "AI & Data Science with Python"
+    },
+    "WD2": {
+        "id": "2e69fff1-aec9-4b4c-9955-e873493e3f84",
+        "name": "Web Development (MERN) Advance",
+        "level": 2,
+        "specialization": "Web Development (MERN)"
+    },
+    "LE2": {
+        "id": "c929b40c-b3ef-45ea-aafd-7af91b4e108f",
+        "name": "Language: English Advance",
+        "level": 2,
+        "specialization": "Language: English"
+    },
+    "CS2": {
+        "id": "098f64d8-892f-4e9f-b5d4-5ed9194aaee6",
+        "name": "Cybersecurity Advance",
+        "level": 2,
+        "specialization": "Cybersecurity"
+    },
+    "SC1": {
+        "id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "name": "Fundamentals (CIT) Summer Camp Beginner",
+        "level": 1,
+        "specialization": "Fundamentals (CIT) Summer Camp"
+    },
+    "DM2": {
+        "id": "0d6bc7a1-e5a0-4e75-8601-ed3c6d9534e7",
+        "name": "Digital Marketing Advance",
+        "level": 2,
+        "specialization": "Digital Marketing Specialization"
+    }
+}

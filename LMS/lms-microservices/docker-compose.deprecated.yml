@@ -1,0 +1,594 @@
+# ⚠️  DEPRECATED: This file is no longer used.
+# The active docker-compose.yml is at project root (D:\AIT-LMS\docker-compose.yml).
+# It uses a single postgres instance with init-db.sh creating all databases.
+# Keep this file only for reference — do NOT use for deployments.
+
+services:
+  # Infrastructure Services
+  postgres-auth:
+    image: postgres:15-alpine
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-auth-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d auth_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-course:
+    image: postgres:15-alpine
+    container_name: postgres-course
+    environment:
+      POSTGRES_DB: course_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-course-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d course_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-admission:
+    image: postgres:15-alpine
+    container_name: postgres-admission
+    environment:
+      POSTGRES_DB: admission_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5440:5432"
+    volumes:
+      - postgres-admission-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d admission_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-notification:
+    image: postgres:15-alpine
+    container_name: postgres-notification
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-notification-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d notification_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-certification:
+    image: postgres:15-alpine
+    container_name: postgres-certification
+    environment:
+      POSTGRES_DB: certification_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-certification-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d certification_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-content:
+    image: postgres:15-alpine
+    container_name: postgres-content
+    environment:
+      POSTGRES_DB: content_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres-content-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d content_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-social:
+    image: postgres:15-alpine
+    container_name: postgres-social
+    environment:
+      POSTGRES_DB: social_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres-social-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d social_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-job:
+    image: postgres:15-alpine
+    container_name: postgres-job
+    environment:
+      POSTGRES_DB: job_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+    ports:
+      - "5438:5432"
+    volumes:
+      - postgres-job-data-v2:/var/lib/postgresql/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U lms_user -d job_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data-v2:/data
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: lms_user
+      RABBITMQ_DEFAULT_PASS: lms_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./api-gateway/Dockerfile
+    image: lms-api-gateway:latest
+    container_name: api-gateway
+    volumes:
+      - ./api-gateway:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - COURSE_SERVICE_URL=http://course-service:8002
+      - ADMISSION_SERVICE_URL=http://admission-service:8003
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8003
+      - CERTIFICATION_SERVICE_URL=http://certification-service:8004
+      - CONTENT_SERVICE_URL=http://content-service:8005
+      - SOCIAL_SERVICE_URL=http://social-service:8007
+      - JOB_SERVICE_URL=http://job-service:8008
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+    depends_on:
+      - redis
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./services/auth-service/Dockerfile
+    image: lms-auth-service:latest
+    container_name: auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://lms_user:lms_password@postgres-auth:5432/auth_db
+      - REDIS_URL=redis://redis:6379/1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - ADMISSION_SERVICE_URL=http://admission-service:8003
+      - DEBUG=True
+      - WATCHFILES_FORCE_POLLING=true
+      - PYTHONDONTWRITEBYTECODE=1
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - lms-network
+    volumes:
+      - ./services/auth-service:/app
+      - ./shared:/app/shared
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/').read()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Course Service
+  course-service:
+    build:
+      context: .
+      dockerfile: ./services/course-service/Dockerfile
+    image: lms-course-service:latest
+    container_name: course-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://lms_user:lms_password@postgres-course:5432/course_db
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - REDIS_URL=redis://redis:6379/2
+      - RABBITMQ_URL=amqp://lms_user:lms_password@rabbitmq:5672/
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - DEBUG=True
+      - WATCHFILES_FORCE_POLLING=true
+      - PYTHONDONTWRITEBYTECODE=1
+    depends_on:
+      postgres-course:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - lms-network
+    volumes:
+      - ./services/course-service:/app
+      - ./shared:/app/shared
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health/').read()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Admission Service
+  admission-service:
+    build:
+      context: .
+      dockerfile: ./services/admission-service/Dockerfile
+    image: lms-admission-service:latest
+    container_name: admission-service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://lms_user:lms_password@postgres-admission:5432/admission_db
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - REDIS_URL=redis://redis:6379/8
+      - RABBITMQ_URL=amqp://lms_user:lms_password@rabbitmq:5672/
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - DEBUG=True
+      - WATCHFILES_FORCE_POLLING=true
+      - PYTHONDONTWRITEBYTECODE=1
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS}
+    env_file:
+      - .env
+    depends_on:
+      postgres-admission:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - lms-network
+    volumes:
+      - ./services/admission-service:/app
+      - ./shared:/app/shared
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health/').read()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./services/notification-service/Dockerfile
+    image: lms-notification-service:latest
+    container_name: notification-service
+    ports:
+      - "8004:8003"
+    environment:
+      - DATABASE_URL=postgresql://lms_user:lms_password@postgres-notification:5432/notification_db
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - REDIS_URL=redis://redis:6379/3
+      - RABBITMQ_URL=amqp://lms_user:lms_password@rabbitmq:5672/
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - DEBUG=True
+      - WATCHFILES_FORCE_POLLING=true
+      - PYTHONDONTWRITEBYTECODE=1
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS}
+    env_file:
+      - .env
+    depends_on:
+      postgres-notification:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health/').read()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./services/notification-service:/app
+      - ./shared:/app/shared
+
+  # Certification Service
+  certification-service:
+    build:
+      context: .
+      dockerfile: ./services/certification-service/Dockerfile
+    image: lms-certification-service:latest
+    container_name: certification-service
+    ports:
+      - "8005:8004"
+    volumes:
+      - ./services/certification-service:/app
+      - ./shared:/app/shared
+    environment:
+      - DATABASE_URL=postgresql://lms_user:lms_password@postgres-certification:5432/certification_db
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - COURSE_SERVICE_URL=http://course-service:8002
+      - REDIS_URL=redis://redis:6379/4
+      - RABBITMQ_URL=amqp://lms_user:lms_password@rabbitmq:5672/
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - DEBUG=True
+      - WATCHFILES_FORCE_POLLING=true
+      - PYTHONDONTWRITEBYTECODE=1
+    depends_on:
+      postgres-certification:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      course-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - lms-network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health/').read()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  # Content Service
+  content-service:
+    build:
+      context: .
+      dockerfile: ./services/content-service/Dockerfile
+    image: lms-content-service:latest
+    container_name: content-service
+    ports:
+      - "8006:8005"
+    environment:
+      - DATABASE_URL=postgresql://lms_user:lms_password@postgres-content:5432/content_db
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - REDIS_URL=redis://redis:6379/5
+      - DEBUG=True
+      - WATCHFILES_FORCE_POLLING=true
+      - PYTHONDONTWRITEBYTECODE=1
+    depends_on:
+      postgres-content:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - lms-network
+    volumes:
+      - ./services/content-service:/app
+      - ./shared:/app/shared
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health/').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Social Service (commented out - Dockerfile not yet created)
+  # social-service:
+  #   build:
+  #     context: .
+  #     dockerfile: ./services/social-service/Dockerfile
+  #   image: lms-social-service:latest
+  #   container_name: social-service
+  #   ports:
+  #     - "8006:8006"
+  #   environment:
+  #     - DATABASE_URL=postgresql://lms_user:lms_password@postgres-social:5432/social_db
+  #     - AUTH_SERVICE_URL=http://auth-service:8001
+  #     - REDIS_URL=redis://redis:6379/6
+  #     - DEBUG=True
+  #   depends_on:
+  #     postgres-social:
+  #       condition: service_healthy
+  #     auth-service:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - lms-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # Job Service (commented out - Dockerfile not yet created)
+  # job-service:
+  #   build:
+  #     context: .
+  #     dockerfile: ./services/job-service/Dockerfile
+  #   image: lms-job-service:latest
+  #   container_name: job-service
+  #   ports:
+  #     - "8007:8007"
+  #   environment:
+  #     - DATABASE_URL=postgresql://lms_user:lms_password@postgres-job:5432/job_db
+  #     - AUTH_SERVICE_URL=http://auth-service:8001
+  #     - REDIS_URL=redis://redis:6379/7
+  #     - DEBUG=True
+  #   depends_on:
+  #     postgres-job:
+  #       condition: service_healthy
+  #     auth-service:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - lms-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  # Frontends
+  ait-frontend:
+    build:
+      context: ../ait_fe
+      dockerfile: Dockerfile.dev
+    container_name: ait-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    command: npm run dev
+    networks:
+      - lms-network
+    depends_on:
+      - api-gateway
+
+  lms-frontend:
+    build:
+      context: ../lms_fe
+      dockerfile: Dockerfile.dev
+    container_name: lms-frontend
+    ports:
+      - "3001:3000"
+    volumes:
+      - ../Lms_fe:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - lms-network
+    depends_on:
+      - api-gateway
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - ait-frontend
+      - api-gateway
+    networks:
+      - lms-network
+
+volumes:
+  postgres-auth-data-v2:
+  postgres-course-data-v2:
+  postgres-admission-data-v2:
+  postgres-notification-data-v2:
+  postgres-certification-data-v2:
+  postgres-content-data-v2:
+  postgres-social-data-v2:
+  postgres-job-data-v2:
+  redis-data-v2:
+  rabbitmq-data:
+
+
+networks:
+  lms-network:
+    driver: bridge

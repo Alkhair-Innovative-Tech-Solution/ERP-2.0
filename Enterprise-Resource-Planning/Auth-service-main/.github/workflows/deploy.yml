@@ -1,0 +1,22 @@
+name: Deploy Auth-Service
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          cd /var/www/erp_new/Auth-service
+          git pull origin main
+          docker compose build --no-cache
+          docker compose up -d
+          docker exec -u root auth_service python manage.py collectstatic --noinput || true
+          docker exec auth_service python manage.py seed_permissions
+          echo "Auth-service deployed successfully"

@@ -1,0 +1,6 @@
+[submodule "Auth-service"]
+	path = Auth-service
+	url = https://github.com/fun33333/Auth-service.git
+[submodule "HDMS"]
+	path = HDMS
+	url = https://github.com/fun33333/HDMS.git

@@ -1,0 +1,15 @@
+- generic [ref=e3]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - link [ref=e9] [cursor=pointer]:
+        - /url: https://clickup.com/?noRedirect=true
+        - img [ref=e11]
+      - heading "Connect ClickUp" [level=4] [ref=e13]
+    - img "Loading..." [ref=e16]
+  - generic:
+    - generic:
+      - generic:
+        - status
+    - generic:
+      - generic:
+        - status

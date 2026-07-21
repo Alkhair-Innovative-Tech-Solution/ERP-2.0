@@ -1,0 +1,39 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e3]:
+    - generic [ref=f2e4]:
+      - generic [ref=f2e5]:
+        - img "AIT LMS" [ref=f2e7]
+        - generic [ref=f2e8]:
+          - heading "Welcome Back" [level=1] [ref=f2e9]
+          - paragraph [ref=f2e10]: Welcome back to AIT LMS
+      - generic [ref=f2e11]:
+        - generic [ref=f2e12]:
+          - text: Email or Student ID
+          - generic [ref=f2e13]:
+            - img [ref=f2e15]
+            - textbox "your@email.com or AIT26-XX-XXXX" [ref=f2e18]
+        - generic [ref=f2e19]:
+          - generic [ref=f2e20]:
+            - generic [ref=f2e21]: Password
+            - link "Forgot Password?" [ref=f2e22] [cursor=pointer]:
+              - /url: /forgot-password
+          - generic [ref=f2e23]:
+            - img [ref=f2e25]
+            - textbox "••••••••" [ref=f2e28]
+            - button [ref=f2e29] [cursor=pointer]:
+              - img [ref=f2e30]
+        - button "Remember Me" [ref=f2e34] [cursor=pointer]:
+          - generic [ref=f2e36]: Remember Me
+        - button "Sign In" [ref=f2e37] [cursor=pointer]:
+          - img [ref=f2e38]
+          - text: Sign In
+      - paragraph [ref=f2e42]:
+        - text: New Member?
+        - link "Create Account" [ref=f2e43] [cursor=pointer]:
+          - /url: https://ait.iak.ngo/register
+    - generic [ref=f2e48]:
+      - img "AIT Logo" [ref=f2e54]
+      - generic [ref=f2e55]:
+        - heading "Your Learning Journey" [level=2] [ref=f2e56]
+        - paragraph [ref=f2e57]: Access your courses, track your progress, and achieve your goals.
+  - alert [ref=f2e62]

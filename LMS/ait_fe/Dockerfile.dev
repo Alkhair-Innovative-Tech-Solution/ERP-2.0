@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+COPY package.json ./
+# Remove lockfile to avoid architecture mismatch issues in Docker
+RUN rm -f package-lock.json
+RUN npm install --legacy-peer-deps
+
+COPY . .
+
+ENV NODE_ENV development
+ENV NEXT_TELEMETRY_DISABLED 1
+ENV WATCHPACK_POLLING=true
+ENV CHOKIDAR_USEPOLLING=true
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]

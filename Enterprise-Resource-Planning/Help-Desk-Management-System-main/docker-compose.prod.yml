@@ -1,0 +1,43 @@
+
+# Production overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  user-service:
+    environment:
+      - DEBUG=False
+    restart: always
+
+  ticket-service:
+    environment:
+      - DEBUG=False
+    restart: always
+
+  communication-service:
+    environment:
+      - DEBUG=False
+    restart: always
+
+  file-service:
+    environment:
+      - DEBUG=False
+    restart: always
+
+  frontend-service:
+    environment:
+      - NODE_ENV=production
+    restart: always
+
+  nginx:
+    restart: always
+
+  postgres:
+    restart: always
+
+  redis:
+    restart: always
+
+  celery-worker:
+    restart: always
+
+

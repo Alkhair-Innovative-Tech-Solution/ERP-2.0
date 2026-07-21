@@ -1,0 +1,758 @@
+{
+    "CF0-1": {
+        "scheduled_class_id": "40926227-4a51-4e08-ab11-56d91e52512f",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "1",
+        "teacher_name": "Suleman Khan",
+        "status": "completed"
+    },
+    "GC1-1": {
+        "scheduled_class_id": "b1a0df34-3b15-4227-a01b-39cb6db1ea26",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "1",
+        "teacher_name": "Hasnain",
+        "status": "completed"
+    },
+    "WD1-1": {
+        "scheduled_class_id": "4ab2d8e9-e5b5-4520-beae-bbc7f1c22ef0",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "1",
+        "teacher_name": "Tayyaba Ali",
+        "status": "completed"
+    },
+    "GC1-2": {
+        "scheduled_class_id": "6d07cc56-a9fe-4181-bd98-20c36d0de7cd",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "2",
+        "teacher_name": "Abdul Samad",
+        "status": "completed"
+    },
+    "CF0-2": {
+        "scheduled_class_id": "573f047d-2250-4e84-84a3-1ae600da7ce5",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "2",
+        "teacher_name": "Mudasir Ali",
+        "status": "completed"
+    },
+    "DM1-1": {
+        "scheduled_class_id": "c03c94af-b40d-43cb-8982-794bbd609b92",
+        "course_id": "92cda1fa-c182-45df-97d7-374d06cd0a10",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "1",
+        "teacher_name": "Danish",
+        "status": "completed"
+    },
+    "CF0-3": {
+        "scheduled_class_id": "6bc815c5-9bbc-446b-9cfe-77833b659068",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "3",
+        "teacher_name": "Mudasir Ali",
+        "status": "completed"
+    },
+    "CS1-1": {
+        "scheduled_class_id": "8f75f1f2-1c83-4d62-bb37-1e93f5e599e6",
+        "course_id": "ebf4535e-5c7f-43ec-bed3-476feaacca96",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "1",
+        "teacher_name": "Unaba Rizwan, Mubashir Adam",
+        "status": "completed"
+    },
+    "LE1-1": {
+        "scheduled_class_id": "7949236c-55d0-46b7-98bd-104026414ff7",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "1",
+        "teacher_name": "Zia ul Haq, Usman Khursheed, Anus Sheikh",
+        "status": "completed"
+    },
+    "AI1-1": {
+        "scheduled_class_id": "d95e8e3e-430f-4d37-b193-1267894d0481",
+        "course_id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "1",
+        "teacher_name": "Noman Usman",
+        "status": "completed"
+    },
+    "AI1-4": {
+        "scheduled_class_id": "44ccca17-2f1b-4fef-ba90-e70033a45a96",
+        "course_id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "4",
+        "teacher_name": "Umaima, Noor ul Ain",
+        "status": "completed"
+    },
+    "CF0-4": {
+        "scheduled_class_id": "aaa6ec9b-ca29-4713-a923-aa41b9339123",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "4",
+        "teacher_name": "Bilal Safdar",
+        "status": "completed"
+    },
+    "GC2-2": {
+        "scheduled_class_id": "b6d886e3-58b6-4a60-b6b7-a656102a4933",
+        "course_id": "b0d93394-a4e5-4f91-a76d-b039f2af864b",
+        "course_name": "Graphic Designing & Video Editing Advance",
+        "course_code": "GC2",
+        "section": "2",
+        "teacher_name": "Hasnain",
+        "status": "completed"
+    },
+    "WD1-2": {
+        "scheduled_class_id": "4574aac9-d5ec-4ea2-b09d-15c2d19a5c17",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "2",
+        "teacher_name": "Tayyaba Ali",
+        "status": "completed"
+    },
+    "GC1-3": {
+        "scheduled_class_id": "a46e04f0-e6cf-4dc8-9ce1-8e402daf90c9",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "3",
+        "teacher_name": "Abdul Samad",
+        "status": "completed"
+    },
+    "CF0-5": {
+        "scheduled_class_id": "64dfc581-a3e4-4742-af38-303d4dff9649",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "5",
+        "teacher_name": "Suleman Khan",
+        "status": "completed"
+    },
+    "LE1-2": {
+        "scheduled_class_id": "07024b8d-55b3-4aef-85fc-c0e90ed52bd4",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "2",
+        "teacher_name": "Zia ul Haq, Usman Khursheed, Anus Sheikh",
+        "status": "completed"
+    },
+    "WD1-3": {
+        "scheduled_class_id": "75ce523d-1cb2-4131-80bc-2104d98e6b26",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "3",
+        "teacher_name": "Tayyaba Ali",
+        "status": "completed"
+    },
+    "AI1-2": {
+        "scheduled_class_id": "ac4b4a5c-7cb7-4d0a-9608-bc157e287b7b",
+        "course_id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "2",
+        "teacher_name": "Noman Usman",
+        "status": "completed"
+    },
+    "GD1-1": {
+        "scheduled_class_id": "2b8134e6-2d13-4659-bdb1-bdc04b78276f",
+        "course_id": "6bdfaead-29a3-4ceb-9ccb-11e37ccbe526",
+        "course_name": "Game Development Beginner",
+        "course_code": "GD1",
+        "section": "1",
+        "teacher_name": "Bilal Safdar",
+        "status": "completed"
+    },
+    "CF0-6": {
+        "scheduled_class_id": "d40d5825-4867-4aad-ba14-6aa11f50b45a",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "6",
+        "teacher_name": "Suleman Khan",
+        "status": "completed"
+    },
+    "CF0-7": {
+        "scheduled_class_id": "83a28c73-e1f1-4ebb-9c25-71365f7327d9",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "7",
+        "teacher_name": "Bilal Safdar",
+        "status": "completed"
+    },
+    "CS1-3": {
+        "scheduled_class_id": "2bbc74df-aa78-439c-86f1-c189bb9981bc",
+        "course_id": "ebf4535e-5c7f-43ec-bed3-476feaacca96",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "3",
+        "teacher_name": "Bilal Safdar",
+        "status": "completed"
+    },
+    "CF0-8": {
+        "scheduled_class_id": "83d8dcb6-e962-4437-9da9-b784abc6c640",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "8",
+        "teacher_name": "Mubashir Adam",
+        "status": "completed"
+    },
+    "CF0-9": {
+        "scheduled_class_id": "76fd4ca6-a347-4142-a9b6-351a4608eb7e",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "9",
+        "teacher_name": "Mubashir Adam",
+        "status": "completed"
+    },
+    "LE1-3": {
+        "scheduled_class_id": "4d818347-377d-4cc3-a795-4ec389a64d24",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "3",
+        "teacher_name": "Zia ul Haq, Usman Khursheed, Haya",
+        "status": "completed"
+    },
+    "CF0-10": {
+        "scheduled_class_id": "03e21626-0f35-4dc1-85bf-d774d50ff0f4",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "10",
+        "teacher_name": "Bilal Safdar",
+        "status": "completed"
+    },
+    "WD1-4": {
+        "scheduled_class_id": "5eeffa45-ead2-4cc4-ac6b-ed4af4508896",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "4",
+        "teacher_name": "Syeda Maham",
+        "status": "completed"
+    },
+    "CF0-11": {
+        "scheduled_class_id": "d13f320f-cc04-4d4e-be9e-cadfe9d20ded",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "11",
+        "teacher_name": "Suleman Khan, Abida Noor",
+        "status": "completed"
+    },
+    "DM1-2": {
+        "scheduled_class_id": "f62a7b34-c717-4362-929e-dd9627c97b5e",
+        "course_id": "92cda1fa-c182-45df-97d7-374d06cd0a10",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "2",
+        "teacher_name": "Danish, Haya",
+        "status": "active"
+    },
+    "LE1-4": {
+        "scheduled_class_id": "0616bc9b-88ad-4000-b7cc-e9b7288ac459",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "4",
+        "teacher_name": "Zia ul Haq, Usman Khursheed",
+        "status": "active"
+    },
+    "AI1-3": {
+        "scheduled_class_id": "a26df72c-5591-401e-bd9b-d7f2262544cf",
+        "course_id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "3",
+        "teacher_name": "Noor ul Ain, Malaika",
+        "status": "active"
+    },
+    "GC1-4": {
+        "scheduled_class_id": "08a22eec-5ff8-4884-8aec-99503c8fd827",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "4",
+        "teacher_name": "Rabia Shehzad",
+        "status": "active"
+    },
+    "CF0-12": {
+        "scheduled_class_id": "d7fbc514-0242-4e85-b5da-c22f01c0a8b1",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "12",
+        "teacher_name": "Unaba Rizwan",
+        "status": "active"
+    },
+    "CF0-13": {
+        "scheduled_class_id": "4857b92d-7ef0-4191-b958-dc5d2406b052",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "13",
+        "teacher_name": "Mubashir Adam",
+        "status": "active"
+    },
+    "CF0-14": {
+        "scheduled_class_id": "344305ac-2579-4a3c-9d21-369e665bb692",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "14",
+        "teacher_name": "Unaba Rizwan",
+        "status": "active"
+    },
+    "CS1-2": {
+        "scheduled_class_id": "405e58cf-2b82-46a7-9837-877b933ddc86",
+        "course_id": "ebf4535e-5c7f-43ec-bed3-476feaacca96",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "2",
+        "teacher_name": "Mubashir Adam",
+        "status": "active"
+    },
+    "GC1-5": {
+        "scheduled_class_id": "6c7d481e-beb0-4322-9cb8-176e00ed97b1",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "5",
+        "teacher_name": "Rabia Shehzad",
+        "status": "active"
+    },
+    "AI2-1": {
+        "scheduled_class_id": "111beb27-501b-4c5b-b641-302812ccf6f2",
+        "course_id": "f01459e6-53c9-4ac8-95e4-1621c276fe2a",
+        "course_name": "AI & Data Science with Python Advance",
+        "course_code": "AI2",
+        "section": "1",
+        "teacher_name": "Noman Usman",
+        "status": "active"
+    },
+    "WD2-1": {
+        "scheduled_class_id": "50c530f8-67a1-4a4d-82c0-a5337d6280c6",
+        "course_id": "2e69fff1-aec9-4b4c-9955-e873493e3f84",
+        "course_name": "Web Development (MERN) Advance",
+        "course_code": "WD2",
+        "section": "1",
+        "teacher_name": "Tayyaba Ali",
+        "status": "active"
+    },
+    "CF0-15": {
+        "scheduled_class_id": "099c29c2-bb27-4adb-ab21-a73dd562a50b",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "15",
+        "teacher_name": "Noor ul Ain, Abida Noor",
+        "status": "active"
+    },
+    "DM1-3": {
+        "scheduled_class_id": "4f9e63d6-9607-41af-b39e-3f1d3a61ea98",
+        "course_id": "92cda1fa-c182-45df-97d7-374d06cd0a10",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "3",
+        "teacher_name": "Danish, Haya",
+        "status": "active"
+    },
+    "CF0-16": {
+        "scheduled_class_id": "7ee97eed-fd86-417e-a660-c306c2f3e4d8",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "16",
+        "teacher_name": "Zainab",
+        "status": "active"
+    },
+    "GC2-1": {
+        "scheduled_class_id": "425f44dc-9719-4918-8755-f7e751232aa9",
+        "course_id": "b0d93394-a4e5-4f91-a76d-b039f2af864b",
+        "course_name": "Graphic Designing & Video Editing Advance",
+        "course_code": "GC2",
+        "section": "1",
+        "teacher_name": "Rabia Shehzad",
+        "status": "active"
+    },
+    "WD1-5": {
+        "scheduled_class_id": "b4a0d4b1-fd24-453b-a7c8-e47dffe67398",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "5",
+        "teacher_name": "Rahat Mushtaq",
+        "status": "active"
+    },
+    "LE1-5": {
+        "scheduled_class_id": "5be113ca-3b9f-4c99-9f5f-95bf5d176ead",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "5",
+        "teacher_name": "Zia ul Haq, Usman Khursheed, Anus Sheikh",
+        "status": "active"
+    },
+    "CF0-17": {
+        "scheduled_class_id": "68ea15a8-7a39-4fb6-8f91-cfa536b61824",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "17",
+        "teacher_name": "Zainab",
+        "status": "active"
+    },
+    "CF0-19": {
+        "scheduled_class_id": "a97f6690-4949-4f8c-9f52-d66172934629",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "19",
+        "teacher_name": "Mubashir Adam",
+        "status": "active"
+    },
+    "GC1-7": {
+        "scheduled_class_id": "e05bc826-ee90-42f3-a01a-39857916e895",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "7",
+        "teacher_name": "Abdul Samad",
+        "status": "active"
+    },
+    "WD1-7": {
+        "scheduled_class_id": "6aeb8b55-9b6a-48ee-b36a-df6ed5e22ab2",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "7",
+        "teacher_name": "Rahat Mushtaq",
+        "status": "active"
+    },
+    "CF0-21": {
+        "scheduled_class_id": "81375266-4851-4abf-a57f-b0595e027b7c",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "21",
+        "teacher_name": "Fahad",
+        "status": "active"
+    },
+    "GC1-6": {
+        "scheduled_class_id": "a40254a8-e39a-4d36-bd6e-230245e2d20e",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "6",
+        "teacher_name": "Abdul Samad",
+        "status": "active"
+    },
+    "AI1-5": {
+        "scheduled_class_id": "42e4385e-ecf8-459d-a516-778e412789a2",
+        "course_id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "5",
+        "teacher_name": "Atif Ali Siddiqui",
+        "status": "active"
+    },
+    "CF0-22": {
+        "scheduled_class_id": "f15ec0c2-8c2f-47cf-b9fe-0d5e50238aef",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "22",
+        "teacher_name": "Fahad",
+        "status": "active"
+    },
+    "CF0-18": {
+        "scheduled_class_id": "1cc00571-fe74-4f1a-aaea-75ec452b3598",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "18",
+        "teacher_name": "Unaba Rizwan, Abida Noor",
+        "status": "active"
+    },
+    "LE2-1": {
+        "scheduled_class_id": "d45f777d-72e4-4590-8d9d-68455d94bc50",
+        "course_id": "c929b40c-b3ef-45ea-aafd-7af91b4e108f",
+        "course_name": "Language: English Advance",
+        "course_code": "LE2",
+        "section": "1",
+        "teacher_name": "Zia ul Haq, Usman Khursheed",
+        "status": "active"
+    },
+    "CS2-1": {
+        "scheduled_class_id": "a0a1dd10-5417-4646-a528-8f0ea2447fa4",
+        "course_id": "098f64d8-892f-4e9f-b5d4-5ed9194aaee6",
+        "course_name": "Cybersecurity Advance",
+        "course_code": "CS2",
+        "section": "1",
+        "teacher_name": "Mubashir Adam",
+        "status": "active"
+    },
+    "LE1-6": {
+        "scheduled_class_id": "91e944ba-a3e8-4819-853e-3d136fb7d409",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "6",
+        "teacher_name": "Zia ul Haq, Usman Khursheed",
+        "status": "active"
+    },
+    "CF0-20": {
+        "scheduled_class_id": "b9467446-d036-4b66-b378-a7ab35c36b92",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "20",
+        "teacher_name": "Faizan",
+        "status": "active"
+    },
+    "CF0-23": {
+        "scheduled_class_id": "c24d26ee-8b3b-43fe-a11d-b5e2c3205d4c",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "23",
+        "teacher_name": "Bilal Safdar",
+        "status": "active"
+    },
+    "SC1-1": {
+        "scheduled_class_id": "8d3a62b5-6811-4505-bf86-db04e6b7d85c",
+        "course_id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "course_name": "Fundamentals (CIT) Summer Camp Beginner",
+        "course_code": "SC1",
+        "section": "1",
+        "teacher_name": "Bilal Safdar",
+        "status": "active"
+    },
+    "SC1-2": {
+        "scheduled_class_id": "56c4c639-8691-42e2-a820-1d4911c25003",
+        "course_id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "course_name": "Fundamentals (CIT) Summer Camp Beginner",
+        "course_code": "SC1",
+        "section": "2",
+        "teacher_name": "Ahad Ahmed",
+        "status": "active"
+    },
+    "WD1-6": {
+        "scheduled_class_id": "6c90adbf-f0d3-46fd-83d9-9e33fc89e40e",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "6",
+        "teacher_name": "Syeda Maham",
+        "status": "active"
+    },
+    "SC1-3": {
+        "scheduled_class_id": "f59e8700-8ea1-487d-98bd-9a29cb563e55",
+        "course_id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "course_name": "Fundamentals (CIT) Summer Camp Beginner",
+        "course_code": "SC1",
+        "section": "3",
+        "teacher_name": "Haya",
+        "status": "active"
+    },
+    "DM1-4": {
+        "scheduled_class_id": "1f8c308a-f4f2-47fa-9d75-50408b6cb8db",
+        "course_id": "92cda1fa-c182-45df-97d7-374d06cd0a10",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "4",
+        "teacher_name": "Danish, Haya",
+        "status": "active"
+    },
+    "CS1-4": {
+        "scheduled_class_id": "715e77f4-a0a1-4a21-a0f0-81513283aa48",
+        "course_id": "ebf4535e-5c7f-43ec-bed3-476feaacca96",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "4",
+        "teacher_name": "Mubashir Adam",
+        "status": "active"
+    },
+    "CF0-24": {
+        "scheduled_class_id": "6b655066-caa1-49a3-9071-da6e3d9b7359",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "24",
+        "teacher_name": "Faizan",
+        "status": "active"
+    },
+    "SC1-4": {
+        "scheduled_class_id": "6ee93a4e-0d7f-4b62-89b3-7609f86a0c30",
+        "course_id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "course_name": "Fundamentals (CIT) Summer Camp Beginner",
+        "course_code": "SC1",
+        "section": "4",
+        "teacher_name": "Bilal Safdar",
+        "status": "active"
+    },
+    "SC1-5": {
+        "scheduled_class_id": "bc131680-316d-4b6f-b536-4e3c72fff85d",
+        "course_id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "course_name": "Fundamentals (CIT) Summer Camp Beginner",
+        "course_code": "SC1",
+        "section": "5",
+        "teacher_name": "Rahat Mushtaq",
+        "status": "active"
+    },
+    "AI2-2": {
+        "scheduled_class_id": "e704cc6c-4b77-4d1d-b0fd-de2a60bdf26d",
+        "course_id": "f01459e6-53c9-4ac8-95e4-1621c276fe2a",
+        "course_name": "AI & Data Science with Python Advance",
+        "course_code": "AI2",
+        "section": "2",
+        "teacher_name": "Noman Usman",
+        "status": "active"
+    },
+    "SC1-6": {
+        "scheduled_class_id": "dbdbbae5-ba5f-4192-99d8-38f2da73c08b",
+        "course_id": "28e792a7-0324-4d91-87e0-9f5031529544",
+        "course_name": "Fundamentals (CIT) Summer Camp Beginner",
+        "course_code": "SC1",
+        "section": "6",
+        "teacher_name": "Yamna Rasheed, Haya",
+        "status": "active"
+    },
+    "GC1-8": {
+        "scheduled_class_id": "980136d1-5723-4c2c-b81a-32372b535181",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "8",
+        "teacher_name": "Rabia Shehzad",
+        "status": "active"
+    },
+    "LE1-8": {
+        "scheduled_class_id": "72b2de61-c9d0-4d06-8fb1-b3cba4c556a9",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "8",
+        "teacher_name": "Zia ul Haq, Usman Khursheed, Anus Sheikh",
+        "status": "active"
+    },
+    "WD2-2": {
+        "scheduled_class_id": "27a96eae-d4b8-444d-be3d-81c530947c34",
+        "course_id": "2e69fff1-aec9-4b4c-9955-e873493e3f84",
+        "course_name": "Web Development (MERN) Advance",
+        "course_code": "WD2",
+        "section": "2",
+        "teacher_name": "Tayyaba Ali",
+        "status": "active"
+    },
+    "AI1-6": {
+        "scheduled_class_id": "64501667-7e66-4ba1-b757-1baf8a6380a8",
+        "course_id": "4b37cea2-3941-486e-9bfb-242b1d426f0d",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "6",
+        "teacher_name": "Mudasir Ali",
+        "status": "active"
+    },
+    "CF0-25": {
+        "scheduled_class_id": "d219df52-1191-456d-bb61-8874e35f8750",
+        "course_id": "85f6bbd0-c217-48d6-822d-ade93b9c2209",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "25",
+        "teacher_name": "Mubashir Adam",
+        "status": "active"
+    },
+    "WD1-9": {
+        "scheduled_class_id": "56fe9528-635f-4552-b9e6-abe1ab6d7d55",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "9",
+        "teacher_name": "Shahmir",
+        "status": "upcoming"
+    },
+    "DM1-5": {
+        "scheduled_class_id": "5530c34c-f9bb-40e9-9dad-6af2d0122f35",
+        "course_id": "92cda1fa-c182-45df-97d7-374d06cd0a10",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "5",
+        "teacher_name": "Haya",
+        "status": "upcoming"
+    },
+    "WD1-8": {
+        "scheduled_class_id": "a1e884c3-b8b4-40a5-91f2-c3e81d170ed6",
+        "course_id": "91a38157-4b5c-4aea-a19c-6f829418d08f",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "8",
+        "teacher_name": "Syeda Maham",
+        "status": "upcoming"
+    },
+    "GC1-9": {
+        "scheduled_class_id": "19551dc0-60cb-497f-aeba-ce8ded5c9ccb",
+        "course_id": "b9383e75-3639-4272-9dfb-4ef787df1608",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "9",
+        "teacher_name": "Rabia Shehzad",
+        "status": "upcoming"
+    },
+    "GD1-2": {
+        "scheduled_class_id": "c62ba4c7-508e-4e97-b7f0-b71cbc66aa96",
+        "course_id": "6bdfaead-29a3-4ceb-9ccb-11e37ccbe526",
+        "course_name": "Game Development Beginner",
+        "course_code": "GD1",
+        "section": "2",
+        "teacher_name": "Bilal Safdar",
+        "status": "upcoming"
+    },
+    "GC2-3": {
+        "scheduled_class_id": "973d94bb-ccd0-4c0f-b5cf-7d754ee8146c",
+        "course_id": "b0d93394-a4e5-4f91-a76d-b039f2af864b",
+        "course_name": "Graphic Designing & Video Editing Advance",
+        "course_code": "GC2",
+        "section": "3",
+        "teacher_name": "Abdul Samad",
+        "status": "upcoming"
+    },
+    "DM2-1": {
+        "scheduled_class_id": "3b4b7e28-1188-4d7a-9513-9c8010a8eb99",
+        "course_id": "0d6bc7a1-e5a0-4e75-8601-ed3c6d9534e7",
+        "course_name": "Digital Marketing Advance",
+        "course_code": "DM2",
+        "section": "1",
+        "teacher_name": "Danish, Haya",
+        "status": "upcoming"
+    },
+    "LE1-7": {
+        "scheduled_class_id": "f5d89abf-9639-4b3f-8ba8-0ce689c30224",
+        "course_id": "69f08da6-5616-4811-bb95-af71519bebee",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "7",
+        "teacher_name": "Sir Hassan",
+        "status": "upcoming"
+    }
+}

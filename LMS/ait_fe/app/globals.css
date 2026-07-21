@@ -1,0 +1,410 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Typographica';
+  src: url('/fonts/TypoGraphica Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+:root {
+  --background: 0 0% 97%;
+  --text-primary: 230 85% 24%;
+  --text-secondary: 60 2% 3%;
+  --hover-primary: 184 82% 48%;
+  --hover-secondary: 41 100% 68%;
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.35);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --glass-blur: 12px;
+  --body-bg: linear-gradient(135deg, #f8f8f8 0%, #eef2f7 50%, #f0f4f8 100%);
+}
+
+.dark {
+  --background: 230 85% 10%;
+  --text-primary: 0 0% 97%;
+  --text-secondary: 60 2% 97%;
+  --glass-bg: rgba(17, 24, 39, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --body-bg: #0a0b0a;
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+  background: var(--body-bg);
+  min-height: 100vh;
+}
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Typographica', sans-serif !important;
+}
+
+.btn-primary {
+  background-color: #0a1b71;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  transition: all 0.3s;
+  transform: scale(1);
+}
+
+.btn-primary:hover {
+  background-color: #17d0de;
+  transform: scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.dark .btn-primary {
+  background-color: #17d0de;
+}
+
+.dark .btn-primary:hover {
+  background-color: #ffc95c;
+  color: black;
+}
+
+.btn-secondary {
+  background-color: #ffc95c;
+  color: black;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  transition: all 0.3s;
+  transform: scale(1);
+}
+
+.btn-secondary:hover {
+  background-color: #17d0de;
+  color: white;
+  transform: scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  transition: all 0.3s;
+}
+
+.card:hover {
+  border-color: #17d0de;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 9999px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.3s;
+}
+
+.input-field:focus {
+  border-color: #17d0de;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(23, 208, 222, 0.5);
+}
+
+.dark .input-field {
+  background-color: #1f2937;
+  border-color: #4b5563;
+}
+
+.input-field:hover {
+  border-color: #17d0de;
+}
+
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.6s ease-out;
+}
+
+.animate-on-scroll.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.floating-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transform: translateY(-100%);
+  transition: transform 0.3s ease-out;
+}
+
+.floating-navbar.visible {
+  transform: translateY(0);
+}
+
+.floating-navbar.scroll-up {
+  transform: translateY(0);
+  transition: transform 0.3s ease-in;
+}
+
+.floating-navbar.scroll-down {
+  transform: translateY(-100%);
+  transition: transform 0.3s ease-out;
+}
+
+.scroll-up {
+  top: 0; /* Navbar visible */
+}
+
+.scroll-down {
+  top: -100px; /* Navbar hidden */
+}
+
+
+.nav-link {
+  position: relative;
+  padding: 0.5rem 1rem;
+  color: #090908;
+  transition: all 0.3s;
+}
+
+.dark .nav-link {
+  color: white;
+}
+
+.nav-link:hover {
+  color: #17d0de;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background-color: #17d0de;
+  transition: all 0.3s;
+  border-radius: 9999px;
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+.card-3d {
+  transition: all 0.5s ease;
+}
+
+.card-3d:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+
+.font-typographica {
+  font-family: 'Typographica', system-ui, sans-serif;
+}
+
+.sponsor-scroll {
+  animation: scroll 30s linear infinite;
+}
+
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.hero-slide {
+  animation: fadeInOut 15s infinite;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+
+.gradient-text {
+  background: linear-gradient(45deg, #17d0de, #ffc95c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient 3s ease infinite;
+  background-size: 200% 200%;
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.shimmer-text {
+  position: relative;
+  display: inline-block;
+  background: linear-gradient(90deg, rgba(0, 255, 169, 0) 25%, rgba(0, 255, 169, 0.3) 50%, rgba(255, 100, 0, 0) 75%, rgba(78, 248, 191, 0.3) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+  background-clip: text; /* Ensures shimmer is only on the text */
+  color: transparent; /* Makes sure the base text is transparent so the gradient is visible */
+}
+
+@keyframes shimmer {
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Carousel Styles */
+.carousel {
+  position: relative;
+  overflow: hidden;
+  /* border-radius: 1rem; */
+}
+
+.carousel-inner {
+  display: flex;
+  transition: transform 0.5s ease-out;
+}
+
+.carousel-item {
+  flex: none;
+  width: 100%;
+}
+
+.carousel-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 9999px;
+  padding: 0.5rem;
+  color: #1f2937;
+  transition: all 0.3s;
+}
+
+.dark .carousel-button {
+  background-color: rgba(31, 41, 55, 0.8);
+  color: white;
+}
+
+.carousel-button:hover {
+  background-color: #17d0de;
+  color: white;
+}
+
+.carousel-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #17d0de;
+}
+
+.carousel-button-prev {
+  left: 1rem;
+}
+
+.carousel-button-next {
+  right: 1rem;
+}
+
+/* Form validation styles */
+.input-error {
+  border-color: #ef4444;
+}
+
+.input-error:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5);
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.success-message {
+  color: #10b981;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+@keyframes marquee-infinite {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-infinite-reverse {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-marquee-infinite {
+  animation: marquee-infinite 40s linear infinite;
+}
+
+.animate-marquee-infinite-reverse {
+  animation: marquee-infinite-reverse 45s linear infinite;
+}
+
+.animate-marquee-infinite:hover,
+.animate-marquee-infinite-reverse:hover {
+  animation-play-state: paused;
+}
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(23, 208, 222, 0.8); /* SeaGrean color with opacity */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(23, 208, 222, 1); /* SeaGrean color fully opaque */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(23, 208, 222, 1); /* SeaGrean color fully opaque */
+}

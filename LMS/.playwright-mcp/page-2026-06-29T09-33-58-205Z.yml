@@ -1,0 +1,35 @@
+- generic [ref=e3]:
+  - generic [ref=e7]:
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - link [ref=e11] [cursor=pointer]:
+          - /url: https://clickup.com/?noRedirect=true
+          - img [ref=e13]
+        - heading "Welcome back!" [level=4] [ref=e15]
+        - paragraph [ref=e16]:
+          - text: Don’t have an account?
+          - link "Sign up" [ref=e17] [cursor=pointer]:
+            - /url: https://app.clickup.com/signup
+      - button "Continue with SSO" [ref=e23] [cursor=pointer]:
+        - img [ref=e25]
+        - generic [ref=e27]: Continue with SSO
+      - generic [ref=e30]: or
+      - form "Login" [ref=e32]:
+        - textbox "Work email" [active] [ref=e36]
+        - generic [ref=e39]:
+          - textbox "Password" [ref=e40]
+          - button "Show" [ref=e41] [cursor=pointer]:
+            - img [ref=e43]
+        - button "Log In" [disabled] [ref=e46]
+    - link "Forgot Password?" [ref=e48] [cursor=pointer]:
+      - /url: https://app.clickup.com/login/forgot
+    - link "Help" [ref=e50] [cursor=pointer]:
+      - /url: https://clickup.com/help
+      - text: Need help?
+  - generic:
+    - generic:
+      - generic:
+        - status
+    - generic:
+      - generic:
+        - status

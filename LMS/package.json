@@ -1,0 +1,27 @@
+{
+  "name": "ait-lms",
+  "version": "1.0.0",
+  "description": "This is the master docker-compose configuration for the entire Al Khair IT Institute Learning Management System.",
+  "main": "browser-test.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rao-Faizan/LMS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Rao-Faizan/LMS/issues"
+  },
+  "homepage": "https://github.com/Rao-Faizan/LMS#readme",
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}

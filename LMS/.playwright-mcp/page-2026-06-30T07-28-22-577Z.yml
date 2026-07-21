@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - heading "Course Not Found" [level=2] [ref=e4]
+      - paragraph [ref=e5]: The course details you are looking for are not available.
+      - link "Back to Courses" [ref=e6] [cursor=pointer]:
+        - /url: /courses
+  - alert [ref=e7]

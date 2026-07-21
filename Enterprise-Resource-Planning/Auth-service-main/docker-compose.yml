@@ -1,0 +1,50 @@
+# =============================================
+# Auth-Service: Unified Docker Compose
+# Spins up both Django Backend + Next.js Frontend
+# Attaches to the shared erp_network created by infra
+# =============================================
+
+services:
+  # ------------------------------------------
+  # Auth Django Backend (Port 8000)
+  # ------------------------------------------
+  auth-service:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: auth_service
+    env_file:
+      - ../.env
+    environment:
+      - TZ=UTC
+    expose:
+      - "8000"
+    volumes:
+      - ./Backend/src:/app  # Mount source for live reload in dev
+      - ../config:/etc/erp/keys:ro  # JWT key files (read-only)
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # ------------------------------------------
+  # Auth Next.js Frontend (Port 3005)
+  # Mapped to 3005 to avoid clash with HDMS frontend (3001)
+  # ------------------------------------------
+  auth-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: auth_frontend
+    env_file:
+      - ../.env
+    environment:
+      - NEXT_PUBLIC_API_URL=https://hrms.idaraalkhair.sbs/api
+    expose:
+      - "3000"
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+networks:
+  erp_network:
+    external: true  # Uses shared network created by docker-compose.infra.yml

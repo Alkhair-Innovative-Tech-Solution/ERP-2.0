@@ -1,0 +1,140 @@
+services:
+  # Ticket Service
+  ticket-service:
+    build:
+      context: ./services/ticket-service
+      dockerfile: Dockerfile
+    container_name: hdms-ticket-service
+    env_file:
+      - ../.env # Load root .env file
+    volumes:
+      # src:/app volume removed for production (code is baked into image)
+      - ./services/shared:/shared
+      - ../config:/etc/erp/keys:ro
+    expose:
+      - "8002"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8002/health/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+
+  # Communication Service
+  communication-service:
+    build:
+      context: ./services/communication-service
+      dockerfile: Dockerfile
+    container_name: hdms-communication-service
+    command: sh -c "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8003 core.asgi:application"
+    env_file:
+      - ../.env
+    volumes:
+      # src:/app volume removed for production (code is baked into image)
+      - ./services/shared:/shared
+      - ../config:/etc/erp/keys:ro
+    expose:
+      - "8003"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8003/health/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      ticket-service:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # File Service
+  file-service:
+    build:
+      context: ./services/file-service
+      dockerfile: Dockerfile
+    container_name: hdms-file-service
+    env_file:
+      - ../.env
+    volumes:
+      # src:/app volume removed for production (code is baked into image)
+      - ./services/shared:/shared
+      - ../config:/etc/erp/keys:ro
+      - file_storage:/app/media
+    expose:
+      - "8005"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8005/health/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      ticket-service:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # Celery Worker for File Scanning
+  celery-worker-files:
+    build:
+      context: ./services/file-service
+      dockerfile: Dockerfile
+    container_name: hdms-file-worker
+    command: celery -A core worker --loglevel=info
+    env_file:
+      - ../.env
+    volumes:
+      # src:/app volume removed for production (code is baked into image)
+      - ./services/shared:/shared
+      - ../config:/etc/erp/keys:ro
+      - file_storage:/app/media
+    depends_on:
+      - file-service
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # Frontend Service
+  frontend-service:
+    build:
+      context: ./services/frontend-service
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_WS_URL: wss://hdms.idaraalkhair.sbs/ws
+        NEXT_PUBLIC_API_URL: https://hdms.idaraalkhair.sbs
+    container_name: hdms-frontend-service
+    env_file:
+      - ../.env
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - AUTH_SERVICE_INTERNAL_URL=https://hrms.idaraalkhair.sbs
+      - NEXT_PUBLIC_API_URL=https://hdms.idaraalkhair.sbs
+      - NEXT_PUBLIC_AUTH_SERVICE_URL=https://hrms.idaraalkhair.sbs
+      - NEXT_PUBLIC_WS_URL=wss://hdms.idaraalkhair.sbs/ws
+    expose:
+      - "3000"
+    depends_on:
+      ticket-service:
+        condition: service_healthy
+      communication-service:
+        condition: service_healthy
+      file-service:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+
+networks:
+  erp_network:
+    external: true
+
+volumes:
+  file_storage:

@@ -1,0 +1,84 @@
+# Add these patterns to .gitignore to prevent committing unnecessary files
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+**/venv/
+**/env/
+**/ENV/
+.venv/
+**/.venv/
+venv_host_backup/
+**/venv_host_backup/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Development/Test files
+test_*.py
+verify_*.py
+debug_*.py
+*_health_check.py
+diag.py
+django_version.py
+pip_main.py
+build_log*.txt
+notif_logs.txt
+auth_logs.txt
+/db_check.py
+
+# Logs
+*.log
+logs/
+*.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# pytest
+.pytest_cache/
+.tox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json

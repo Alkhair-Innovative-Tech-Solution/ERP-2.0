@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+{% if create_with_credentials_url %}
+<li>
+    <a href="{{ create_with_credentials_url }}" class="addlink">
+        {% trans "Create with Credentials" %}
+    </a>
+</li>
+{% endif %}
+{{ block.super }}
+{% endblock %}

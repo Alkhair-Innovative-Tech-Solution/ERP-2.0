@@ -1,0 +1,594 @@
+{
+    "CF0-20": {
+        "scheduled_class_id": "584f2e16-838a-4128-b50c-f81e3bb3884d",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "20",
+        "status": "active"
+    },
+    "CF0-23": {
+        "scheduled_class_id": "76593357-596f-4bb9-b594-8c1a4b92e8b5",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "23",
+        "status": "active"
+    },
+    "AI1-3": {
+        "scheduled_class_id": "73e2a2ca-f27a-486e-afca-e02611ba3f74",
+        "course_id": "7a4fb9ad-2b5a-4eb2-8848-6cd6a7875dce",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "3",
+        "status": "active"
+    },
+    "AI2-1": {
+        "scheduled_class_id": "dd10b33e-c2cd-4cfc-8dc5-05e03f7ca4df",
+        "course_id": "bf2199ba-f709-401e-9069-6f03b2ef8db5",
+        "course_name": "AI & Data Science with Python Advance",
+        "course_code": "AI2",
+        "section": "1",
+        "status": "active"
+    },
+    "AI1-5": {
+        "scheduled_class_id": "821e0664-41dd-454f-9e20-2e61744cd700",
+        "course_id": "7a4fb9ad-2b5a-4eb2-8848-6cd6a7875dce",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "5",
+        "status": "active"
+    },
+    "CS1-2": {
+        "scheduled_class_id": "1c7db9e3-1d70-42b1-bcb7-d0135f856197",
+        "course_id": "fe440f9e-b4cf-4583-9d44-702c57730b04",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "2",
+        "status": "active"
+    },
+    "CS1-3": {
+        "scheduled_class_id": "9b5e3274-262a-473a-b61e-7493e797961f",
+        "course_id": "fe440f9e-b4cf-4583-9d44-702c57730b04",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "3",
+        "status": "completed"
+    },
+    "DM1-2": {
+        "scheduled_class_id": "a761a22a-d183-49ab-9562-3e32271fae9b",
+        "course_id": "02f4224d-152e-419c-ae28-69f7d45a00b5",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "2",
+        "status": "active"
+    },
+    "DM2-2": {
+        "scheduled_class_id": "73226ff4-81da-4504-a990-2ea6710c2fe8",
+        "course_id": "4786d300-a9b9-4428-85cb-c7333e99b140",
+        "course_name": "Digital Marketing Advance",
+        "course_code": "DM2",
+        "section": "2",
+        "status": "active"
+    },
+    "DM1-3": {
+        "scheduled_class_id": "a0c394e8-2652-4f21-af21-e1ce871751fe",
+        "course_id": "02f4224d-152e-419c-ae28-69f7d45a00b5",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "3",
+        "status": "active"
+    },
+    "CF0-18": {
+        "scheduled_class_id": "b27ef636-62d0-48c0-909a-3101f691be3f",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "18",
+        "status": "active"
+    },
+    "CF0-11": {
+        "scheduled_class_id": "bd70f089-7572-4256-9aef-cebeebaa4994",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "11",
+        "status": "active"
+    },
+    "CF0-8": {
+        "scheduled_class_id": "4c66e7ab-863b-4c8b-81d9-8b14229e42d4",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "8",
+        "status": "active"
+    },
+    "CF0-12": {
+        "scheduled_class_id": "7f3aef0e-226b-4c1a-989d-b6947995f470",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "12",
+        "status": "active"
+    },
+    "CF0-9": {
+        "scheduled_class_id": "9c318490-83ad-444d-85d2-f083ca124592",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "9",
+        "status": "active"
+    },
+    "CF0-10": {
+        "scheduled_class_id": "58b3dfda-fa8b-439e-a151-79a52d3a5f0f",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "10",
+        "status": "active"
+    },
+    "CF0-13": {
+        "scheduled_class_id": "2154de17-b34b-4a18-9d92-ea91ce59e999",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "13",
+        "status": "active"
+    },
+    "CF0-15": {
+        "scheduled_class_id": "f2421c39-613a-4f5f-ac65-465141ac9179",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "15",
+        "status": "active"
+    },
+    "CF0-16": {
+        "scheduled_class_id": "0d60d3cb-5a95-4a36-a2f0-a819d5c266e5",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "16",
+        "status": "active"
+    },
+    "CF0-14": {
+        "scheduled_class_id": "2919ac89-43b9-4851-a43a-b6550f05eb1b",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "14",
+        "status": "active"
+    },
+    "CF0-21": {
+        "scheduled_class_id": "dcd39a9f-4161-4298-8a67-8149dd3f52f7",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "21",
+        "status": "active"
+    },
+    "CF0-19": {
+        "scheduled_class_id": "b4bde5af-1718-4527-8d32-f623a0d68450",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "19",
+        "status": "active"
+    },
+    "CF0-17": {
+        "scheduled_class_id": "194b1889-317d-4f2a-aef0-73dab45f651b",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "17",
+        "status": "active"
+    },
+    "CF0-22": {
+        "scheduled_class_id": "b5759183-ea97-45ee-b232-95639fd64269",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "22",
+        "status": "active"
+    },
+    "GD2-1": {
+        "scheduled_class_id": "be8a217c-d8af-4b2a-9db0-54469a14bea8",
+        "course_id": "21f5d632-8132-4b7b-957a-9acb6205f69b",
+        "course_name": "Game Development Advance",
+        "course_code": "GD2",
+        "section": "1",
+        "status": "active"
+    },
+    "GC1-4": {
+        "scheduled_class_id": "78044603-ad28-4d7e-9e84-3e1f317adde3",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "4",
+        "status": "active"
+    },
+    "GC1-6": {
+        "scheduled_class_id": "dc4e1ecb-5d65-4775-9957-d20aeed22ffc",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "6",
+        "status": "active"
+    },
+    "GC1-5": {
+        "scheduled_class_id": "fc26c0af-0407-4f44-8edd-015d2aa4ff27",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "5",
+        "status": "active"
+    },
+    "GC2-1": {
+        "scheduled_class_id": "c9cc2aa4-66be-483b-b4c4-7f25d2513f89",
+        "course_id": "cc7cf007-2d0f-450d-b63b-ad35b4df1a00",
+        "course_name": "Graphic Designing & Video Editing Advance",
+        "course_code": "GC2",
+        "section": "1",
+        "status": "active"
+    },
+    "LE1-3": {
+        "scheduled_class_id": "5681657a-dbe4-447c-9d9c-9f442d9d7eaa",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "3",
+        "status": "active"
+    },
+    "LE1-4": {
+        "scheduled_class_id": "f6165433-4a7d-4880-a92a-198a9ff44bb6",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "4",
+        "status": "active"
+    },
+    "LE1-5": {
+        "scheduled_class_id": "df827e6f-5330-4b69-bc04-551c0cfc8fec",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "5",
+        "status": "active"
+    },
+    "WD1-4": {
+        "scheduled_class_id": "70c1f038-0a5b-4f5a-b6d6-88fa526ab91b",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "4",
+        "status": "active"
+    },
+    "WD2-1": {
+        "scheduled_class_id": "e82ba3e8-d149-429e-907b-9278cafc83df",
+        "course_id": "7b615c98-90ed-494e-84ad-8f919a834c63",
+        "course_name": "Web Development (MERN) Advance",
+        "course_code": "WD2",
+        "section": "1",
+        "status": "active"
+    },
+    "WD1-5": {
+        "scheduled_class_id": "09db13af-f12e-4d20-a236-351643b83193",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "5",
+        "status": "active"
+    },
+    "WD1-7": {
+        "scheduled_class_id": "975b160e-d2c0-44ed-8372-d1c67ec9e2fe",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "7",
+        "status": "active"
+    },
+    "AI1-4": {
+        "scheduled_class_id": "2896d4ff-30c7-48d6-be77-039bc811950e",
+        "course_id": "7a4fb9ad-2b5a-4eb2-8848-6cd6a7875dce",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "4",
+        "status": "completed"
+    },
+    "AI1-2": {
+        "scheduled_class_id": "147673e1-7002-48da-8327-4cfd0a2436c7",
+        "course_id": "7a4fb9ad-2b5a-4eb2-8848-6cd6a7875dce",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "2",
+        "status": "completed"
+    },
+    "AI1-1": {
+        "scheduled_class_id": "aaea4cbd-ef22-4295-bb63-028efd9baa51",
+        "course_id": "7a4fb9ad-2b5a-4eb2-8848-6cd6a7875dce",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "1",
+        "status": "completed"
+    },
+    "CS1-1": {
+        "scheduled_class_id": "8ff6c86e-a5e5-49ef-86c6-a5ce42185cd2",
+        "course_id": "fe440f9e-b4cf-4583-9d44-702c57730b04",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "1",
+        "status": "completed"
+    },
+    "DM1-1": {
+        "scheduled_class_id": "ce6968c4-dec4-4df1-9935-50c1972570fb",
+        "course_id": "02f4224d-152e-419c-ae28-69f7d45a00b5",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "1",
+        "status": "completed"
+    },
+    "CF0-7": {
+        "scheduled_class_id": "afca55d6-13c8-4bad-8de8-d6356297c8da",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "7",
+        "status": "completed"
+    },
+    "CF0-6": {
+        "scheduled_class_id": "2cd05ba7-03da-428b-acd0-d7cd2ecae358",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "6",
+        "status": "completed"
+    },
+    "CF0-1": {
+        "scheduled_class_id": "4b88509c-70ba-489f-b1ed-25f9273af250",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "1",
+        "status": "completed"
+    },
+    "CF0-2": {
+        "scheduled_class_id": "7afeafd6-2a12-4f1e-8590-e9c79a853660",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "2",
+        "status": "completed"
+    },
+    "CF0-5": {
+        "scheduled_class_id": "fa9b10ad-d11f-477d-891a-5cc00fc6eedb",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "5",
+        "status": "completed"
+    },
+    "CF0-3": {
+        "scheduled_class_id": "73eea59f-2794-43e6-8c06-37a106b5b9f1",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "3",
+        "status": "completed"
+    },
+    "CF0-4": {
+        "scheduled_class_id": "cf1e48db-efd8-4fb4-8328-ff7ca9f77501",
+        "course_id": "3fde22f2-c7ac-4a71-97e8-5951b0614286",
+        "course_name": "Fundamentals(CIT) Level 0",
+        "course_code": "CF0",
+        "section": "4",
+        "status": "completed"
+    },
+    "GD1-1": {
+        "scheduled_class_id": "485c6faa-2948-4945-bb49-b0c233cabec3",
+        "course_id": "261ddb58-580f-491b-b002-d357300b5121",
+        "course_name": "Game Development Beginner",
+        "course_code": "GD1",
+        "section": "1",
+        "status": "completed"
+    },
+    "GC1-1": {
+        "scheduled_class_id": "ccc9395f-4b09-4630-aee9-17ae25d2ce97",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "1",
+        "status": "completed"
+    },
+    "GC1-3": {
+        "scheduled_class_id": "e3a279fa-ccf7-4470-adcd-a375b9f8d24c",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "3",
+        "status": "completed"
+    },
+    "GC1-2": {
+        "scheduled_class_id": "2eebe375-a3d5-4bca-b8aa-795e9464ad57",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "2",
+        "status": "completed"
+    },
+    "GC2-2": {
+        "scheduled_class_id": "f97aa33a-4ea5-4855-bb46-ca2fcb0e5687",
+        "course_id": "cc7cf007-2d0f-450d-b63b-ad35b4df1a00",
+        "course_name": "Graphic Designing & Video Editing Advance",
+        "course_code": "GC2",
+        "section": "2",
+        "status": "completed"
+    },
+    "LE1-1": {
+        "scheduled_class_id": "4b1b2253-bbc1-41b6-9f7a-9c500e90fa4a",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "1",
+        "status": "completed"
+    },
+    "LE1-2": {
+        "scheduled_class_id": "7b411b07-77cd-4ff8-856c-a740de2deaa4",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "2",
+        "status": "completed"
+    },
+    "WD1-1": {
+        "scheduled_class_id": "23857205-fc83-4a21-8527-c5d95d3c4f17",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "1",
+        "status": "completed"
+    },
+    "WD1-2": {
+        "scheduled_class_id": "b0764eb6-b783-4bd2-bf04-03efe19b63db",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "2",
+        "status": "completed"
+    },
+    "WD1-3": {
+        "scheduled_class_id": "34cdea4f-3ad4-4976-ad18-761185d8ee14",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "3",
+        "status": "completed"
+    },
+    "PM1-1": {
+        "scheduled_class_id": "b4a4eb6e-570c-46b7-aff2-159b3dfa05d7",
+        "course_id": "afab3490-d930-4946-a762-0cae1afd6fc2",
+        "course_name": "Project Management Beginner",
+        "course_code": "PM1",
+        "section": "1",
+        "status": "upcoming"
+    },
+    "CS1-4": {
+        "scheduled_class_id": "a0362ebc-c5b1-44a7-a871-61e383c7ab2c",
+        "course_id": "fe440f9e-b4cf-4583-9d44-702c57730b04",
+        "course_name": "Cybersecurity Beginner",
+        "course_code": "CS1",
+        "section": "4",
+        "status": "upcoming"
+    },
+    "CS2-1": {
+        "scheduled_class_id": "3cc1ab85-32f3-44f8-b04b-ae8bd572e5af",
+        "course_id": "c97c5b8a-9045-4ef3-86e6-4674c4a9bbe7",
+        "course_name": "Cybersecurity Advance",
+        "course_code": "CS2",
+        "section": "1",
+        "status": "upcoming"
+    },
+    "DM1-4": {
+        "scheduled_class_id": "767f16c1-50df-4bf7-b3c9-409b1b93e6c3",
+        "course_id": "02f4224d-152e-419c-ae28-69f7d45a00b5",
+        "course_name": "Digital Marketing Beginner",
+        "course_code": "DM1",
+        "section": "4",
+        "status": "upcoming"
+    },
+    "DM2-1": {
+        "scheduled_class_id": "76051b3b-1e9f-4428-a2e7-d72f96538fa4",
+        "course_id": "4786d300-a9b9-4428-85cb-c7333e99b140",
+        "course_name": "Digital Marketing Advance",
+        "course_code": "DM2",
+        "section": "1",
+        "status": "upcoming"
+    },
+    "GD1-2": {
+        "scheduled_class_id": "8ad04c67-6762-4309-83ab-5b5c9c0eb296",
+        "course_id": "261ddb58-580f-491b-b002-d357300b5121",
+        "course_name": "Game Development Beginner",
+        "course_code": "GD1",
+        "section": "2",
+        "status": "upcoming"
+    },
+    "LE1-6": {
+        "scheduled_class_id": "ac0056e2-56cb-4079-8866-1389425ba6a2",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "6",
+        "status": "upcoming"
+    },
+    "LE1-7": {
+        "scheduled_class_id": "eaa1a63b-83e2-4709-91ad-4677d12d8bc3",
+        "course_id": "60762003-2971-4c46-a613-053fd406d043",
+        "course_name": "Language: English Beginner",
+        "course_code": "LE1",
+        "section": "7",
+        "status": "upcoming"
+    },
+    "LE2-1": {
+        "scheduled_class_id": "3e848abc-ec52-4583-bbb1-1bd5c2474dfa",
+        "course_id": "23d9ffc9-eda3-4666-8714-d846f915f8d8",
+        "course_name": "Language: English Advance",
+        "course_code": "LE2",
+        "section": "1",
+        "status": "active"
+    },
+    "GC2-3": {
+        "scheduled_class_id": "99b5e40b-7c2a-4196-b9ee-7c4762f9c76a",
+        "course_id": "cc7cf007-2d0f-450d-b63b-ad35b4df1a00",
+        "course_name": "Graphic Designing & Video Editing Advance",
+        "course_code": "GC2",
+        "section": "3",
+        "status": "upcoming"
+    },
+    "WD1-6": {
+        "scheduled_class_id": "1f8b089d-2a67-4002-a64c-aa476f02e105",
+        "course_id": "a0f5c8dc-3ada-482d-a920-635a227db550",
+        "course_name": "Web Development (MERN) Beginner",
+        "course_code": "WD1",
+        "section": "6",
+        "status": "upcoming"
+    },
+    "WD2-2": {
+        "scheduled_class_id": "d83a96ab-cb32-4dc5-8258-a458e5906900",
+        "course_id": "7b615c98-90ed-494e-84ad-8f919a834c63",
+        "course_name": "Web Development (MERN) Advance",
+        "course_code": "WD2",
+        "section": "2",
+        "status": "upcoming"
+    },
+    "AI2-2": {
+        "scheduled_class_id": "53986721-4771-43c9-b5a0-12c22b9d95ae",
+        "course_id": "bf2199ba-f709-401e-9069-6f03b2ef8db5",
+        "course_name": "AI & Data Science with Python Advance",
+        "course_code": "AI2",
+        "section": "2",
+        "status": "upcoming"
+    },
+    "AI1-6": {
+        "scheduled_class_id": "55722928-9bcd-4c4a-9cf2-b303173582e1",
+        "course_id": "7a4fb9ad-2b5a-4eb2-8848-6cd6a7875dce",
+        "course_name": "AI & Data Science with Python Beginner",
+        "course_code": "AI1",
+        "section": "6",
+        "status": "upcoming"
+    },
+    "GC1-7": {
+        "scheduled_class_id": "c914292d-0061-4677-b3b9-dc26109bd9dd",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "7",
+        "status": "active"
+    },
+    "GC1-9": {
+        "scheduled_class_id": "4bc1bf34-78f2-4171-a46c-25b6de7e5d35",
+        "course_id": "aa03b695-bc84-453c-98a4-341e78fa4df8",
+        "course_name": "Graphic Designing & Video Editing Beginner",
+        "course_code": "GC1",
+        "section": "9",
+        "status": "upcoming"
+    }
+}

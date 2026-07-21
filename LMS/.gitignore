@@ -1,0 +1,75 @@
+# Environments
+.env
+.env.local
+.env.*.local
+*.env.prod
+*.env.production
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+**/venv/
+**/env/
+**/ENV/
+**/.venv/
+venv_host_backup/
+**/venv_host_backup/
+**/__pycache__/
+
+# Node
+node_modules/
+frontend/node_modules/
+ait_fe/node_modules/
+ait_fe/.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+*.txt
+build_log*.txt
+notif_logs.txt
+auth_logs.txt
+/db_check.py
+*.pyc
+pnpm-lock.yaml
+.next/
+dist/
+build/
+*/staticfiles
+**/staticfiles/
+*/static/
+**/static/
+*.staticfiles
+.staticfiles/
+
+# Frontend static files
+ait_fe/.next/static/
+Lms_fe/.next/static/
+*/public/static/
+**/public/static/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Microservices static files
+lms-microservices/services/*/staticfiles/
+
+# Sensitive files — NEVER commit
+credentials.json
+token.json
+users_dump.json
+deposits_sync*.json
+enrollment_mapping.json
+master_enrollment_mapping.json

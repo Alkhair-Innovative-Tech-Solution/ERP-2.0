@@ -1,0 +1,217 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e6]:
+        - link "Idara Al-Khair" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img "Idara Al-Khair" [ref=e9]
+        - generic [ref=e10]:
+          - button [ref=e11] [cursor=pointer]:
+            - img [ref=e12]
+          - link "Register" [ref=e14] [cursor=pointer]:
+            - /url: /register
+            - button "Register" [ref=e15]
+          - button "Toggle menu" [ref=e16] [cursor=pointer]:
+            - img [ref=e17]
+    - main [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e21]:
+          - heading "Free & Verified Tech Courses" [level=2] [ref=e22]
+          - paragraph
+          - generic [ref=e23]:
+            - link "Explore Courses" [ref=e24] [cursor=pointer]:
+              - /url: /courses
+              - button "Explore Courses" [ref=e25]:
+                - generic [ref=e26]: Explore Courses
+            - link "Go to LMS" [ref=e27] [cursor=pointer]:
+              - /url: https://lms.iak.ngo
+              - button "Go to LMS" [ref=e28]:
+                - generic [ref=e29]:
+                  - text: Go to LMS
+                  - img [ref=e30]
+        - button [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+        - button [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+      - generic [ref=e39]:
+        - heading "Our Specializations" [level=2] [ref=e40]
+        - generic [ref=e41]:
+          - button [ref=e42] [cursor=pointer]:
+            - img [ref=e43]
+          - button [ref=e45] [cursor=pointer]:
+            - img [ref=e46]
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - heading "Empower Your Future with Our IT Training Courses." [level=2] [ref=e54]
+          - paragraph [ref=e55]: Join our cutting-edge courses designed to equip you with the latest skills in web development, AI, cybersecurity, and more. Start your journey towards a successful IT career with us.
+          - link "Enroll Now →" [ref=e57] [cursor=pointer]:
+            - /url: /courses
+            - button "Enroll Now →" [ref=e58]
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - img [ref=e64]
+            - heading "Web Development Training" [level=3] [ref=e66]
+            - paragraph [ref=e67]: Master front-end and back-end technologies to build modern web applications.
+          - generic [ref=e68]:
+            - img [ref=e71]
+            - heading "Full Stack Development" [level=3] [ref=e74]
+            - paragraph [ref=e75]: Learn to develop complete web applications with hands-on projects.
+          - generic [ref=e76]:
+            - img [ref=e79]
+            - heading "AI & Machine Learning" [level=3] [ref=e82]
+            - paragraph [ref=e83]: Explore AI-driven solutions and machine learning applications.
+          - generic [ref=e84]:
+            - img [ref=e87]
+            - heading "E-Commerce Development" [level=3] [ref=e91]
+            - paragraph [ref=e92]: Learn how to build and manage successful online stores.
+      - generic [ref=e94]:
+        - heading "Why Choose AIT?" [level=1] [ref=e95]
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - img [ref=e99]
+            - heading "Expert Faculty" [level=3] [ref=e102]
+            - paragraph [ref=e103]: Learn from industry professionals
+          - generic [ref=e104]:
+            - img [ref=e106]
+            - heading "Small Class Size" [level=3] [ref=e111]
+            - paragraph [ref=e112]: Personalized attention and support
+          - generic [ref=e113]:
+            - img [ref=e115]
+            - heading "Modern Curriculum" [level=3] [ref=e117]
+            - paragraph [ref=e118]: Updated with industry demands
+          - generic [ref=e119]:
+            - img [ref=e121]
+            - heading "Career Support" [level=3] [ref=e124]
+            - paragraph [ref=e125]: Placement assistance and guidance
+      - generic [ref=e129]:
+        - generic [ref=e130]:
+          - heading "Empowering Your Learning Journey" [level=2] [ref=e131]
+          - paragraph [ref=e132]: Discover our comprehensive suite of learning tools and resources
+        - generic [ref=e133]:
+          - generic [ref=e134]:
+            - img [ref=e137]
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - heading "Live Test" [level=3] [ref=e141]
+                - paragraph [ref=e142]: Experience real-time testing environments that simulate actual exam conditions. Practice with industry-standard questions to build confidence.
+              - link "Explore More →" [ref=e143] [cursor=pointer]:
+                - /url: /about
+                - button "Explore More →" [ref=e144]
+          - generic [ref=e145]:
+            - img [ref=e148]
+            - generic [ref=e151]:
+              - generic [ref=e152]:
+                - heading "High Yield Questions" [level=3] [ref=e153]
+                - paragraph [ref=e154]: Access our curated collection of high-impact questions designed by industry experts to maximize your learning potential.
+              - link "Explore More →" [ref=e155] [cursor=pointer]:
+                - /url: /about
+                - button "Explore More →" [ref=e156]
+          - generic [ref=e157]:
+            - img [ref=e160]
+            - generic [ref=e161]:
+              - generic [ref=e162]:
+                - heading "Insightful Analytics" [level=3] [ref=e163]
+                - paragraph [ref=e164]: Track your progress with detailed performance metrics and personalized insights to identify areas for improvement.
+              - link "Explore More →" [ref=e165] [cursor=pointer]:
+                - /url: /about
+                - button "Explore More →" [ref=e166]
+      - generic [ref=e168]:
+        - generic [ref=e169]:
+          - paragraph [ref=e170]: Testimonials
+          - heading "What Our Community Says" [level=2] [ref=e171]
+        - generic [ref=e173]:
+          - generic [ref=e176]:
+            - img [ref=e178]
+            - paragraph [ref=e181]: Mind boggling initiative to educate ... only if we had more schools like this, the country would look a whole lot different.
+            - generic [ref=e182]:
+              - paragraph [ref=e183]: Omar Javaid
+              - paragraph [ref=e184]: IOBM
+              - paragraph [ref=e185]: Education Director
+          - generic [ref=e188]:
+            - img [ref=e190]
+            - paragraph [ref=e193]: The innovative approach to learning has transformed how we think about education.
+            - generic [ref=e194]:
+              - paragraph [ref=e195]: Sarah Chen
+              - paragraph [ref=e196]: EdTech Solutions
+              - paragraph [ref=e197]: Technology Lead
+          - generic [ref=e200]:
+            - img [ref=e202]
+            - paragraph [ref=e205]: A revolutionary step forward in making quality education accessible to all.
+            - generic [ref=e206]:
+              - paragraph [ref=e207]: Michael Rodriguez
+              - paragraph [ref=e208]: Future Learning Institute
+              - paragraph [ref=e209]: Principal Consultant
+          - generic [ref=e212]:
+            - img [ref=e214]
+            - paragraph [ref=e217]: The quality of education and dedication to student success is truly remarkable.
+            - generic [ref=e218]:
+              - paragraph [ref=e219]: Ayesha Khan
+              - paragraph [ref=e220]: Digital Learning Academy
+              - paragraph [ref=e221]: Program Manager
+          - generic [ref=e224]:
+            - img [ref=e226]
+            - paragraph [ref=e229]: I recently completed the one-year programming course at Idara Alkhair, and it was an excellent experience. The instructors were knowledgeable and supportive, making complex topics easy to understand. The course covered essential skills like HTML, CSS, WordPress, Canva, Bootstrap, and JavaScript, providing a strong foundation in web development. The practical projects were particularly helpful in building my portfolio. I highly recommend this course to anyone looking to start a career in web development. Thank you, Idara Alkhair, for a fantastic learning experience!
+            - generic [ref=e230]:
+              - paragraph [ref=e231]: Noor-Ul-Ain
+              - paragraph [ref=e232]: Digital Learning Academy
+              - paragraph [ref=e233]: Program Manager
+        - generic [ref=e234]:
+          - button [ref=e235] [cursor=pointer]:
+            - img [ref=e236]
+          - button [ref=e238] [cursor=pointer]:
+            - img [ref=e239]
+    - generic [ref=e242]:
+      - generic [ref=e243]:
+        - generic [ref=e244]:
+          - link "Idara Al-Khair" [ref=e245] [cursor=pointer]:
+            - /url: /
+            - img "Idara Al-Khair" [ref=e247]
+          - paragraph [ref=e248]: Serving humanity since 1987 – we're here to help and make the world a better place, one step at a time!
+          - link "Find Us on the Map" [ref=e249] [cursor=pointer]:
+            - /url: /contact
+            - generic [ref=e250]: Find Us on the Map
+            - img [ref=e251]
+          - img "QR Scan" [ref=e254]
+        - generic [ref=e255]:
+          - heading "Let's Talk!" [level=2] [ref=e256]
+          - list [ref=e257]:
+            - listitem [ref=e258]:
+              - img [ref=e260]
+              - generic [ref=e262]: A 507, Sector 11-A ,Near Power House Chorangi, North Karachi, Karachi, Pakistan
+            - listitem [ref=e263]:
+              - img [ref=e265]
+              - generic [ref=e267]: "02136950309"
+            - listitem [ref=e268]:
+              - img [ref=e270]
+              - generic [ref=e272]: AIT.info@iak.ngo
+            - listitem [ref=e273]:
+              - img [ref=e275]
+              - generic [ref=e277]: +92 333 2336203
+        - generic [ref=e278]:
+          - heading "Quick Links" [level=2] [ref=e279]
+          - list [ref=e280]:
+            - listitem [ref=e281]:
+              - link "Home" [ref=e282] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e283]:
+              - link "About Us" [ref=e284] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e285]:
+              - link "Schools That Rock" [ref=e286] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e287]:
+              - link "Our Projects" [ref=e288] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e289]:
+              - link "Gallery of Wonders" [ref=e290] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e291]:
+              - link "Get in Touch!" [ref=e292] [cursor=pointer]:
+                - /url: "#"
+        - generic [ref=e293]:
+          - heading "Fresh News! 🍞" [level=2] [ref=e294]
+          - list [ref=e295]:
+            - listitem [ref=e296] [cursor=pointer]: "Exciting News: The IAK IT Institute is Here! 🚀"
+            - listitem [ref=e297] [cursor=pointer]: Join Our Newsletter and Stay Updated! 📰
+      - separator [ref=e298]
+      - paragraph [ref=e300]: © 1987 - 2025 All rights reserved | Idara Al-Khair – Your welfare, our priority!

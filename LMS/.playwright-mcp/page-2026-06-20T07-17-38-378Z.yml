@@ -1,0 +1,94 @@
+- application [active] [ref=e1]:
+  - iframe [ref=e238]:
+    
+  - iframe [ref=e2]:
+    
+  - banner "Menu bar" [ref=e3]:
+    - generic [ref=e6]:
+      - link "Sheets home" [ref=e8] [cursor=pointer]:
+        - /url: https://docs.google.com/spreadsheets/u/0/?pli=1&authuser=0&usp=sheets_web
+      - generic [ref=e15]:
+        - generic "📢 Admission Form – Al-Khair Institute of Technology (AIT) (Responses)" [ref=e17]:
+          - generic [ref=e19]: 📢 Admission Form – Al-Khair Institute of Technology (AIT) (Responses)
+          - generic [ref=e21]:
+            - checkbox "Star" [ref=e23] [cursor=pointer]
+            - button "Add shortcut to Drive" [ref=e240] [cursor=pointer]
+            - 'button "Document status: Saved to Drive." [ref=e27]'
+        - generic [ref=e35]:
+          - generic [ref=e245]:
+            - button "Malaika Muhammad Ameer" [ref=e314]:
+              - img "Malaika Muhammad Ameer" [ref=e319] [cursor=pointer]
+            - button "1 hidden 2 total viewers" [ref=e320] [cursor=pointer]:
+              - generic [ref=e249]: "+1"
+          - button "Last edit was 3 minutes ago" [disabled] [ref=e321]
+          - button "Join a call here or present this tab to the call" [ref=e256] [cursor=pointer]
+          - generic [ref=e42]:
+            - button "Share. Shared with others." [ref=e257] [cursor=pointer]: Share
+            - button "Quick sharing actions" [ref=e45] [cursor=pointer]
+          - 'button "Google Account: Rao Faizan Raza (faizan.ait@iak.ngo)" [ref=e49] [cursor=pointer]':
+            - img [ref=e50]
+    - generic [ref=e51]:
+      - menubar [ref=e53]:
+        - menuitem "File" [ref=e54] [cursor=pointer]
+        - menuitem "Edit" [ref=e55] [cursor=pointer]
+        - menuitem "View" [ref=e56] [cursor=pointer]
+        - menuitem "Insert" [disabled] [ref=e57]
+        - menuitem "Format" [disabled] [ref=e58]
+        - menuitem "Data" [ref=e59] [cursor=pointer]
+        - menuitem "Tools" [ref=e60] [cursor=pointer]
+        - menuitem "Extensions" [disabled] [ref=e61]
+        - menuitem "Help" [ref=e62] [cursor=pointer]
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - toolbar "Search the menus (Alt+/)" [ref=e65]:
+            - combobox "Menus" [ref=e67]
+          - toolbar "Main" [ref=e68]:
+            - button "Print (Ctrl+P)" [ref=e69] [cursor=pointer]
+            - button "Filter views" [ref=e74] [cursor=pointer]
+            - combobox "Zoom" [ref=e83] [cursor=pointer]:
+              - option "Zoom list. 100% selected." [selected] [ref=e86]:
+                - textbox "Zoom" [ref=e87]: 100%
+            - button "Mode" [ref=e91] [cursor=pointer]:
+              - generic [ref=e92]: View only
+        - toolbar "Mode and view" [ref=e95]:
+          - button "Hide the menus (Ctrl+Shift+F)" [ref=e96] [cursor=pointer]
+    - generic:
+      - generic:
+        - button "Show side panel":
+          - img [ref=e260] [cursor=pointer]
+    - generic [ref=e103]:
+      - generic "Name box (Ctrl + J)" [ref=e104]:
+        - textbox [ref=e105]: A1
+        - button "Name box menu button. Select one of the menu items to navigate to its corresponding named range." [ref=e107] [cursor=pointer]
+      - textbox [ref=e123]
+  - generic [ref=e126]:
+    - toolbar [ref=e343]:
+      - generic [ref=e346]:
+        - textbox "Table Name" [ref=e348]
+        - button "Table menu" [ref=e350] [cursor=pointer]
+        - button "Views" [ref=e357] [cursor=pointer]
+    - navigation "Sheet tab bar" [ref=e155]:
+      - toolbar [ref=e156]:
+        - button "All Sheets" [ref=e157] [cursor=pointer]
+      - toolbar [ref=e166]:
+        - button "Admission Test" [ref=e167] [cursor=pointer]:
+          - generic [ref=e175]: Admission Test
+        - button "Fee Waiver" [ref=e179] [cursor=pointer]:
+          - generic [ref=e187]: Fee Waiver
+        - button "Admissions Application" [ref=e191] [cursor=pointer]:
+          - generic [ref=e199]: Admissions Application
+        - button "Students" [ref=e203] [cursor=pointer]:
+          - generic [ref=e209]: Students
+        - button "Specializations and TimeTable" [ref=e213]:
+          - generic [ref=e219]: Specializations and TimeTable
+      - toolbar [ref=e223]:
+        - button "Scroll left" [ref=e224] [cursor=pointer]
+        - button "Scroll right" [disabled] [ref=e229]
+  - generic [ref=e234]:
+    - textbox
+  - link "Turn on screen reader support" [ref=e235] [cursor=pointer]:
+    - /url: "#"
+  - textbox [ref=e236]
+  - region [ref=e237]: To enable screen reader support, press Ctrl+Alt+Z To learn about keyboard shortcuts, press Ctrl+slash
+  - region
+  - generic [ref=e311]: Yamna Rasheed has joined the document.

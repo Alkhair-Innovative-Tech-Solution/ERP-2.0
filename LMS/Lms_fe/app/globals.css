@@ -1,0 +1,479 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* â”€â”€ Brand Palette â”€â”€ */
+    --brand-teal: #2a9f90;
+    --brand-dark: #264653;
+    --brand-orange: #c96928;
+
+    --success-green: #34d399;
+    --warning-orange: #c96928;
+    --error-red: #f43f5e;
+    --card-white: #FFFFFF;
+    --text-dark: #0f172a;
+    --text-light: #94a3b8;
+
+    /* â”€â”€ Shadcn UI CSS variables (light mode) â”€â”€ */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 171.4 58.3% 39.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 194.5 37.1% 23.7%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 171.4 58.3% 39.2%;
+    --radius: 1rem;
+    --chart-1: 171 58% 39%;
+    --chart-2: 194 37% 24%;
+    --chart-3: 24 67% 47%;
+  }
+
+  .dark {
+    --background: 194.5 37.1% 23.7%;
+    --foreground: 210 40% 98%;
+    --card: 194.5 37.1% 23.7%;
+    --card-foreground: 210 40% 98%;
+    --popover: 194.5 37.1% 23.7%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 171.4 58.3% 39.2%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 194.5 37.1% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 194.5 37.1% 15%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 194.5 37.1% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 194.5 37.1% 30%;
+    --input: 194.5 37.1% 30%;
+    --ring: 171.4 58.3% 39.2%;
+  }
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   GLOBAL BASE â€“ applies to every element automatically
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    @apply bg-slate-50 text-slate-900;
+    font-size: 0.9375rem;   /* 15px â€“ comfortable reading size */
+    line-height: 1.6;
+    font-weight: 400;
+    color: var(--text-dark);
+  }
+
+  /* Headings â€“ consistent across all pages */
+  h1 { font-size: 2rem;    font-weight: 800; line-height: 1.2; color: #0f172a; letter-spacing: -0.025em; }
+  h2 { font-size: 1.5rem;  font-weight: 700; line-height: 1.25; color: #0f172a; letter-spacing: -0.015em; }
+  h3 { font-size: 1.125rem; font-weight: 700; line-height: 1.35; color: #1e293b; }
+  h4 { font-size: 0.9375rem; font-weight: 600; line-height: 1.4;  color: #334155; }
+
+  p  { font-size: 0.9375rem; line-height: 1.65; color: #475569; }
+
+  /* Inputs and selects â€“ consistent across all pages */
+  input, textarea, select {
+    font-family: inherit;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: #0f172a;
+  }
+
+  label {
+    font-size: 0.8125rem;  /* 13px */
+    font-weight: 600;
+    color: #475569;
+  }
+
+  button {
+    font-family: inherit;
+  }
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   REUSABLE COMPONENT CLASSES
+   Use these in every page for instant consistency.
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+@layer components {
+
+  /* â”€â”€ Page headers â”€â”€ */
+  .page-header {
+    @apply mb-0;
+  }
+  .page-title {
+    @apply text-2xl font-black text-slate-900 tracking-tight;
+  }
+  .page-subtitle {
+    @apply text-sm font-bold text-slate-400 mt-1;
+  }
+  .page-badge {
+    @apply inline-flex items-center gap-1.5 text-[10px] font-black text-brand-teal uppercase tracking-widest mb-2;
+  }
+
+  /* â”€â”€ Section headings inside cards â”€â”€ */
+  .section-heading {
+    @apply text-base font-bold text-slate-800 border-b border-slate-100 pb-3 mb-6;
+  }
+  .card-label {
+    @apply block text-xs font-semibold text-slate-500 mb-1.5;
+  }
+
+  /* â”€â”€ Cards â”€â”€ */
+  .ui-card {
+    @apply bg-white rounded-2xl border border-slate-100 shadow-sm p-6 transition-all;
+  }
+  .ui-card-lg {
+    @apply bg-white rounded-3xl border border-slate-100 shadow-md shadow-slate-200/50 p-8;
+  }
+  .moodle-card {
+    @apply bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 p-8 transition-all hover:shadow-2xl;
+  }
+
+  /* â”€â”€ Form inputs (use on all input, select, textarea) â”€â”€ */
+  .form-input {
+    @apply w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl
+           text-[0.9375rem] font-medium text-slate-900 placeholder:text-slate-400
+           focus:outline-none focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal
+           transition-all duration-200;
+  }
+  .form-input-sm {
+    @apply w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg
+           text-sm font-medium text-slate-900 placeholder:text-slate-400
+           focus:outline-none focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal
+           transition-all duration-200;
+  }
+  /* backward compat alias */
+  .moodle-input {
+    @apply form-input;
+  }
+
+  /* â”€â”€ Buttons â”€â”€ */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-brand-teal text-white
+           px-5 py-2.5 rounded-xl
+           text-sm font-semibold
+           hover:bg-teal-600 hover:shadow-lg hover:shadow-brand-teal/25
+           active:scale-[0.98] transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-brand-dark text-white
+           px-5 py-2.5 rounded-xl
+           text-sm font-semibold
+           hover:bg-slate-800 hover:shadow-lg
+           active:scale-[0.98] transition-all duration-200;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           bg-transparent text-slate-500
+           px-4 py-2 rounded-lg
+           text-sm font-semibold
+           hover:bg-slate-100 hover:text-slate-900
+           active:scale-[0.98] transition-all duration-200;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white text-brand-teal border border-slate-200
+           px-5 py-2.5 rounded-xl
+           text-sm font-semibold
+           hover:bg-slate-50 hover:border-brand-teal/40 hover:shadow-md
+           active:scale-[0.98] transition-all duration-200;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2
+           bg-red-50 text-red-600 border border-red-100
+           px-5 py-2.5 rounded-xl
+           text-sm font-semibold
+           hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-md
+           active:scale-[0.98] transition-all duration-200;
+  }
+
+  /* â”€â”€ Table â”€â”€ */
+  .ui-table-head {
+    @apply text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5;
+  }
+  .ui-table-cell {
+    @apply text-sm font-medium text-slate-700 px-5 py-4;
+  }
+
+  /* â”€â”€ Badge / pill â”€â”€ */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-teal   { @apply badge bg-teal-50  text-teal-700; }
+  .badge-green  { @apply badge bg-emerald-50 text-emerald-700; }
+  .badge-orange { @apply badge bg-orange-50 text-orange-700; }
+  .badge-red    { @apply badge bg-red-50   text-red-700; }
+  .badge-slate  { @apply badge bg-slate-100 text-slate-600; }
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   UTILITIES
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-15px); }
+  }
+  .animate-float { animation: float 5s ease-in-out infinite; }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   PREMIUM DASHBOARD DESIGN SYSTEM (SaaS Aesthetic)
+   Inspired by Stripe, Linear, and Modern EdTech
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+:root {
+  --premium-sidebar: #0f172a;
+  --premium-sidebar-accent: #2a9f90;
+  --premium-bg: #f8fafc;
+  
+  /* Glassmorphism Logic */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  
+  /* Soft Shadow System (Layered) */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-premium: 
+    0 10px 15px -3px rgb(0 0 0 / 0.03), 
+    0 4px 6px -4px rgb(0 0 0 / 0.03),
+    0 0 0 1px rgb(0 0 0 / 0.02);
+  --shadow-glass: 0 8px 32px 0 rgba(148, 163, 184, 0.1);
+}
+
+@layer components {
+  /* Premium Sidebar Gradient (Sync with site light blue) */
+  .premium-sidebar-gradient {
+    background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+  }
+
+  /* Glassmorphism Card Utility */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    border-radius: 24px;
+  }
+
+  /* Soft UI Card Utility */
+  .premium-card {
+    background: #ffffff;
+    border: 1px solid rgba(241, 245, 249, 1);
+    box-shadow: var(--shadow-premium);
+    border-radius: 24px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .premium-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 
+      0 20px 25px -5px rgb(0 0 0 / 0.05), 
+      0 8px 10px -6px rgb(0 0 0 / 0.05);
+  }
+
+  /* Icon Glow Effect */
+  .icon-glow {
+    position: relative;
+  }
+  .icon-glow::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    background: currentColor;
+    opacity: 0.15;
+    filter: blur(8px);
+    border-radius: inherit;
+    z-index: -1;
+  }
+}
+
+/* Typography Overrides for Premium Dashboard */
+.premium-dashboard-scope {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+.premium-dashboard-scope h1, 
+.premium-dashboard-scope h2, 
+.premium-dashboard-scope h3 {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  letter-spacing: -0.02em;
+}
+/* ───────────────────────────────────────────────────────────────
+   ENHANCED ANIMATIONS & SHADOW SYSTEM
+   Phase 5 UI Enhancement
+───────────────────────────────────────────────────────────────── */
+
+@layer utilities {
+  /* Page Transitions */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up { animation: slideUp 0.4s ease-out; }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-scale-in { animation: scaleIn 0.3s ease-out; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .animate-slide-in-right { animation: slideInRight 0.3s ease-out; }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .animate-slide-in-left { animation: slideInLeft 0.3s ease-out; }
+
+  /* Micro-interactions */
+  .hover-lift {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 
+                0 4px 6px rgb(0 0 0 / 0.03);
+  }
+
+  .hover-glow {
+    transition: box-shadow 0.3s ease;
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 0 3px rgba(42, 159, 144, 0.15);
+  }
+
+  /* Loading States */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .animate-shimmer {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+
+  /* Stagger animations for lists */
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   ENHANCED SHADOW SYSTEM
+───────────────────────────────────────────────────────────────── */
+:root {
+  /* Shadow Scale */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+  
+  /* Premium Shadows */
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.03);
+  --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px rgb(0 0 0 / 0.03);
+  --shadow-elevated: 0 20px 25px -5px rgb(0 0 0 / 0.06), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+  
+  /* Colored Shadows */
+  --shadow-teal: 0 4px 14px -3px rgba(42, 159, 144, 0.3);
+  --shadow-orange: 0 4px 14px -3px rgba(201, 105, 40, 0.3);
+  --shadow-blue: 0 4px 14px -3px rgba(59, 130, 246, 0.3);
+  
+  /* Glass Shadow */
+  --shadow-glass: 0 8px 32px 0 rgba(148, 163, 184, 0.1);
+}
+
+@layer components {
+  /* Enhanced Card with shadow */
+  .premium-card {
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .premium-card:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+  
+  .premium-card-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   PRINT STYLES ENHANCEMENT
+───────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

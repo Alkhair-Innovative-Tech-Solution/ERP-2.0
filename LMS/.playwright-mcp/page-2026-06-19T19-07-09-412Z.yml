@@ -1,0 +1,40 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - img "AIT LMS" [ref=e10]
+        - generic [ref=e11]:
+          - heading "Welcome Back" [level=1] [ref=e12]
+          - paragraph [ref=e13]: Continue your academic legacy
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - text: Email or Student ID
+          - generic [ref=e16]:
+            - img [ref=e18]
+            - textbox "name@university.edu or AIT26-XX-XXXX" [ref=e21]: rahat.ait@iak.ngo
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - generic [ref=e24]: Authentication Key
+            - link "Lost Key?" [ref=e25] [cursor=pointer]:
+              - /url: /forgot-password
+          - generic [ref=e26]:
+            - img [ref=e28]
+            - textbox "••••••••" [ref=e31]: ait_teacher_123
+            - button [ref=e32] [cursor=pointer]:
+              - img [ref=e33]
+        - button "Persist Session" [ref=e37] [cursor=pointer]:
+          - generic [ref=e39]: Persist Session
+        - button "Grant Access" [ref=e40] [cursor=pointer]:
+          - img [ref=e65]
+          - text: Grant Access
+      - paragraph [ref=e45]:
+        - text: New Member?
+        - link "Initiate Enrollment" [ref=e46] [cursor=pointer]:
+          - /url: /register
+    - generic [ref=e51]:
+      - img "AIT Logo" [ref=e57]
+      - generic [ref=e58]:
+        - heading "Unlock Your Potential." [level=2] [ref=e59]
+        - paragraph [ref=e60]: Access refined academic resources, track institutional progress, and validate your excellence.
+  - status [ref=e73]: Invalid credentials. Attempt 1/5
+  - alert [ref=e4]

@@ -1,0 +1,24 @@
+- generic [ref=e83]:
+  - generic [ref=e86]:
+    - img "ClickUp - Home" [ref=e88] [cursor=pointer]
+    - generic [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e94]: RR
+        - generic [ref=e95]: Rao Faizan Raza
+      - button "Sign Out" [ref=e96] [cursor=pointer]
+    - generic [ref=e100]:
+      - img [ref=e103]
+      - generic [ref=e112]:
+        - heading "This page is unavailable" [level=5] [ref=e113]
+        - paragraph [ref=e114]: You don’t have access to this link or this link is invalid.
+      - button "Go Back" [ref=e116] [cursor=pointer]
+    - generic [ref=e117]:
+      - img "Clickup logo" [ref=e118]
+      - generic [ref=e119]: Productivity by ClickUp
+  - generic:
+    - generic:
+      - generic:
+        - status
+    - generic:
+      - generic:
+        - status

@@ -1,0 +1,26 @@
+Django>=5.0,<6.0
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+django-cors-headers
+# Pin redis-py to 5.x: channels-redis breaks on redis-py 8.x (WebSocket receive
+# loop raises "redis.exceptions.TimeoutError: Timeout reading from redis").
+redis>=4.6,<6
+django-redis
+django-filter
+python-dotenv
+gunicorn
+daphne
+channels
+channels-redis
+whitenoise
+Pillow
+pika
+requests
+pandas>=2.1.0
+openpyxl>=3.1.0
+django-phonenumber-field[phonenumbers]
+reportlab       # PDF export (attendance/services/export_pdf.py). Pure Python on
+                # purpose: WeasyPrint needs cairo/pango system packages, which
+                # the Docker build has no business fetching.
+ams-shared @ file:///app/ams-shared

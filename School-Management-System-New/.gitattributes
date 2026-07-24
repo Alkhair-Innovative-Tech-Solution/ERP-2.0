@@ -1,0 +1,5 @@
+# Ensure shell scripts always use LF line endings in the repo and on checkout
+*.sh text eol=lf
+
+# Default: normalize line endings on commit, use OS native on checkout
+* text=auto

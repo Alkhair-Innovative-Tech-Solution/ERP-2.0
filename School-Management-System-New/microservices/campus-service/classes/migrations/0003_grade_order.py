@@ -1,0 +1,16 @@
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('classes', '0002_initial'),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name='grade',
+            name='order',
+            field=models.PositiveIntegerField(default=0, help_text='Order for sorting (lower numbers first)'),
+        ),
+    ]

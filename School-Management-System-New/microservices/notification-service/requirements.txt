@@ -1,0 +1,21 @@
+Django>=5.0,<6.0
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+django-cors-headers
+# Pin redis-py to 5.x: channels-redis 4.3.0 (declares only redis>=4.6) breaks on
+# redis-py 8.x — the RedisChannelLayer receive loop raises
+# "redis.exceptions.TimeoutError: Timeout reading from redis" on every WS read.
+redis>=4.6,<6
+django-redis
+django-filter
+python-dotenv
+daphne
+channels
+channels-redis
+whitenoise
+pika
+Pillow
+psutil
+pywebpush
+ams-shared @ file:///app/ams-shared

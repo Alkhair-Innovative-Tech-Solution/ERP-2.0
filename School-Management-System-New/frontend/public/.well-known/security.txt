@@ -1,0 +1,4 @@
+Contact: mailto:admin@idaraalkhair.sbs
+Expires: 2027-06-04T00:00:00.000Z
+Preferred-Languages: en, ur
+Scope: https://pms.idaraalkhair.sbs

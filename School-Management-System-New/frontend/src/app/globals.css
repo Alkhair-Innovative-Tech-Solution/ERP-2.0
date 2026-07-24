@@ -1,0 +1,280 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@400..900&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+
+  /* Premium Palette */
+  --p-darkest: #001D39;
+  --p-sidebar: #0A4174;
+  --p-main: #49769F;
+  --p-accent1: #4E8EA2;
+  --p-accent2: #6EA2B3;
+  --p-light: #7BBDE8;
+  --p-lightest: #BDD8E9;
+  --p-bg: #f0f7ff;
+  --p-orange: #f97316; /* Warm orange accent */
+  
+  /* System Mapping */
+  --background: #f4f8fc;
+  --foreground: #001D39;
+
+  --card: #ffffff;
+  --card-foreground: #001D39;
+
+  --popover: #ffffff;
+  --popover-foreground: #001D39;
+
+  --primary: #0A4174;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eef5ff;
+  --secondary-foreground: #0A4174;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #49769F;
+
+  --accent: #eef5ff;
+  --accent-foreground: #0A4174;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #7BBDE8;
+
+  --radius: 18px;
+
+  --sidebar: #0A4174;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #7BBDE8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(255, 255, 255, 0.1);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #7BBDE8;
+
+  /* Shadows */
+  --shadow-premium: 0 10px 25px -5px rgba(10, 65, 116, 0.08), 0 8px 10px -6px rgba(10, 65, 116, 0.05);
+  --shadow-soft: 0 4px 12px rgba(10, 65, 116, 0.04);
+  --shadow-blue: 0 20px 40px -12px rgba(10, 65, 116, 0.15);
+}
+
+@import "tailwindcss";
+
+@theme inline {
+  --font-inter: 'Inter', sans-serif;
+  --font-dm-sans: 'DM Sans', system-ui, sans-serif;
+  --font-playfair: 'Playfair Display', Georgia, serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-xl: 18px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-inter antialiased;
+  }
+}
+
+@layer utilities {
+  .shadow-premium {
+    box-shadow: var(--shadow-premium);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-blue {
+    box-shadow: var(--shadow-blue);
+  }
+  .bg-premium-gradient {
+    background: linear-gradient(135deg, #001D39 0%, #0A4174 100%);
+  }
+  .bg-soft-gradient {
+    background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+  }
+  .text-premium-blue {
+    color: #0A4174;
+  }
+}
+
+/* Hide scrollbar but allow scrolling */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Animation Utilities */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out forwards;
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    size: A4 portrait !important;
+    margin: 0 !important;
+  }
+
+  body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+
+  .page-copy {
+    width: 210mm;
+    height: 297mm;
+    page-break-after: always !important;
+    break-after: page !important;
+    border: none !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    background: #fff !important;
+    padding: 40px 60px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}
+
+/* ──────── CHALLAN COMPONENT STYLES (Screen & Print) ──────── */
+.page-copy { width: 210mm; height: 297mm; background: #fff; padding: 40px 60px; position: relative; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid #e2e8f0; margin: 20px auto; }
+.wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-12deg); font-size: 120px; font-weight: 800; color: rgba(26,68,128,0.04); white-space: nowrap; pointer-events: none; letter-spacing: 12px; z-index: 0; user-select: none; text-transform: uppercase; }
+.copy-inner { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; }
+.copy-label { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 14px; border-radius: 4px; margin-bottom: 20px; width: fit-content; }
+.lbl-bank { background: #fff3e0; color: #c2410c; border: 1.5px solid #f97316; }
+.lbl-school { background: #e8f0fb; color: #1a4480; border: 1.5px solid #2563b0; }
+.lbl-student { background: #e8f5e9; color: #1b5e20; border: 1.5px solid #4caf50; }
+.hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 3px solid #1a4480; }
+.hdr-left { display: flex; align-items: center; gap: 20px; }
+.logo { width: 64px; height: 64px; background: #1a4480; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(26,68,128,0.2); overflow: hidden; }
+.logo img { width: 100%; height: 100%; object-fit: contain; }
+.school-name { font-family: 'Playfair Display', serif; font-size: 28px; color: #1a4480; font-weight: 700; line-height: 1.1; margin: 0; }
+.tagline { font-family: 'DM Sans', sans-serif; font-size: 11px; color: #64748b; margin-top: 5px; font-weight: 500; }
+.affil { font-family: 'DM Sans', sans-serif; font-size: 10px; color: #f97316; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-top: 4px; }
+.hdr-right { display: flex; align-items: flex-start; gap: 15px; }
+.hdr-meta { text-align: right; }
+.hdr-meta p { font-size: 11px; color: #94a3b8; margin: 2px 0; font-weight: 600; }
+.challan-badge { background: #1a4480; color: #fff; padding: 8px 24px; border-radius: 8px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+.badge-title { display: block; font-size: 14px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.badge-num { display: block; color: #f97316; font-size: 12px; font-weight: 800; margin-top: 3px; }
+.info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px 30px; background: #f8fafd; border: 1.5px solid #dce7f3; border-radius: 12px; padding: 20px 25px; margin-bottom: 25px; }
+.info-item .lbl { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
+.info-item .val { font-size: 14px; font-weight: 700; color: #1e2d40; }
+.info-item .val.red { color: #dc2626; }
+.challan-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 25px; border: none; }
+.challan-table thead tr { background: #1a4480; }
+.challan-table thead th { color: #fff; padding: 12px 20px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; }
+.challan-table thead th:first-child { border-radius: 8px 0 0 0; }
+.challan-table thead th:last-child { border-radius: 0 8px 0 0; text-align: right; }
+.challan-table tbody tr { border-bottom: 1px solid #e8eef5; }
+.challan-table tbody tr:nth-child(even) { background: #f8fafd; }
+.challan-table tbody td { padding: 14px 20px; color: #334155; border: none; }
+.challan-table tbody td.amt { text-align: right; font-weight: 700; color: #1e2d40; font-size: 15px; }
+.challan-table tbody td.muted { color: #94a3b8; font-style: italic; font-size: 12px; }
+.challan-table tfoot tr { background: #1a4480; }
+.challan-table tfoot td { padding: 15px 20px; color: #fff; font-weight: 700; font-size: 14px; border: none; }
+.challan-table tfoot td:first-child { border-radius: 0 0 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+.challan-table tfoot td.total-amt { text-align: right; color: #fbbf24; font-size: 20px; border-radius: 0 0 8px 0; }
+.footer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+.fbox { border: 1.5px solid #dce7f3; border-radius: 10px; padding: 20px; background: #fff; }
+.fbox-title { font-size: 10px; font-weight: 700; color: #1a4480; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1.5px solid #e8eef5; padding-bottom: 8px; margin-bottom: 12px; }
+.bank-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; }
+.btag { font-size: 10px; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 4px; }
+.words { font-size: 12px; color: #334155; font-style: italic; line-height: 1.5; margin-bottom: 10px; font-weight: 500; }
+.acno { font-size: 12px; font-weight: 800; color: #1a4480; letter-spacing: 0.5px; }
+.qr-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100px; padding: 10px 0; }
+.qr-lbl { font-size: 9px; font-weight: 700; color: #94a3b8; text-align: center; letter-spacing: 1px; text-transform: uppercase; margin-top: 10px; }
+.sig-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; height: 100%; min-height: 80px; }
+.sig-item { flex: 1; text-align: center; }
+.sig-line { border-top: 1.5px solid #94a3b8; padding-top: 8px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+.note-section { margin-top: auto; border-top: 1.5px solid #e8eef5; padding-top: 20px; display: flex; flex-direction: column; gap: 15px; }
+.note-row { display: flex; align-items: center; justify-content: space-between; }
+.late-policy { background: #fff8ee; border: 1.5px solid #f97316; border-radius: 10px; padding: 15px 20px; }
+.late-policy p { font-size: 11px; color: #92400e; line-height: 1.6; margin: 0; }
+.late-policy b { color: #1e2d40; font-weight: 800; }
+.pg-footer { background: #f8fafc; border-top: 2px solid #e2e8f0; padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; margin-top: 20px; }
+.pg-footer p { font-size: 10px; color: #64748b; margin: 0; font-weight: 500; }
+.pg-footer strong { color: #1a4480; font-weight: 800; }
+.late-badge { background: #fff3e0; border: 1px solid #f97316; color: #c2410c; font-size: 10px; font-weight: 700; padding: 5px 15px; border-radius: 6px; }
+
+/* Custom Scrollbar for Charts */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+  display: block !important;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #274C77;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #1a3452;
+}
+.custom-scrollbar {
+  scrollbar-width: thin !important;
+  scrollbar-color: #274C77 #f1f5f9 !important;
+  -ms-overflow-style: auto !important;
+}
+  

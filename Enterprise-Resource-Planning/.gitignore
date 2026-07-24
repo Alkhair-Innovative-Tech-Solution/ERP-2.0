@@ -2,9 +2,6 @@
 # Submodules (handled by their own gitignores internally)
 # (do NOT ignore the directories themselves — they're submodules)
 
-# VMS — nested git repo, tracked separately
-VMS/                           
-                                                                                        
 # Secrets — only .env.example is committed
 .env
 .env.dev

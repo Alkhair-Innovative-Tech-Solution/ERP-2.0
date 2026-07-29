@@ -50,12 +50,40 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 #     def __str__(self):
 #         return self.email
 
+class Tenant(SoftDeleteModel):
+    """
+    The paying customer. Subscriptions (tenant x service) attach here.
+    Organization remains the HR structure root, owned by a Tenant.
+    One user (Employee) = one Tenant, derived from Employee.organization.tenant.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, help_text="Tenant / customer name")
+    tenant_code = models.CharField(max_length=20, unique=True, help_text="Short code for the tenant (e.g. VMST)")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Tenant"
+        verbose_name_plural = "Tenants"
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant_code})"
+
+
 class Organization(SoftDeleteModel):
     """
-    The root entity (NGO or Company). 
+    The root entity (NGO or Company).
     Centralizes global settings and basic info.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='organizations',
+        help_text="Paying customer this organization belongs to"
+    )
     name = models.CharField(max_length=255, help_text="Organization Name (e.g., Al-Khidmat Foundation)")
     org_code = models.CharField(max_length=10, unique=True, help_text="Short code for the organization (e.g., AKF)")
     website = models.URLField(blank=True, null=True)
@@ -331,7 +359,15 @@ class Employee(SoftDeleteModel):
     )
     
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name='employees', null=True, blank=True)
-    
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='employees',
+        help_text="Denormalized from organization.tenant — set automatically on save. One employee = one tenant."
+    )
+
     # Core Personal Data
     full_name = models.CharField(max_length=200)
     cnic = models.CharField(max_length=15, unique=True)
@@ -415,6 +451,8 @@ class Employee(SoftDeleteModel):
             padding = 4 if num < 10000 else len(str(num))
             prefix = self.organization.org_code if self.organization else "IAK"
             self.employee_id = f"{prefix}-{num:0{padding}d}"
+        if not self.tenant_id and self.organization_id and self.organization.tenant_id:
+            self.tenant_id = self.organization.tenant_id
         super().save(*args, **kwargs)
 
     def __str__(self):

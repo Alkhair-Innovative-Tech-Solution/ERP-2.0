@@ -11,6 +11,7 @@ from permissions.api import router as permissions_router
 from employees.api import router as employees_router
 from audit.api import router as audit_router
 from permissions.rbac_api import router as rbac_router
+from authentication.jwks_view import jwks_view
 
 # Initialize Ninja API
 api = NinjaAPI(
@@ -29,6 +30,7 @@ api.add_router("/permissions/rbac", rbac_router)  # RBAC management at /api/perm
 urlpatterns = [
     path('auth-admin/', admin.site.urls),
     path('api/', api.urls),  # All API endpoints under /api/
+    path('.well-known/jwks.json', jwks_view),
 ]
 
 # Serve media files in development

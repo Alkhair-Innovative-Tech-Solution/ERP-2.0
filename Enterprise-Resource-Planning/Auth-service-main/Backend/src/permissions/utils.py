@@ -6,7 +6,7 @@ Used by authentication APIs and middleware to verify:
 - What is employee's role in HDMS?
 - What permissions does employee have?
 """
-from permissions.models import ServiceAccess, HdmsRole, VmsRole
+from permissions.models import ServiceAccess, HdmsRole
 
 
 def has_service_access(employee, service_name):
@@ -101,13 +101,17 @@ def get_sis_role(employee):
 
 
 def get_vms_role(employee):
-    """Get employee's VMS role if they have VMS access."""
-    try:
-        access = ServiceAccess.objects.get(employee=employee, service='vms', is_active=True, is_deleted=False)
-        vms_role = VmsRole.objects.get(service_access=access, is_deleted=False)
-        return {'role_type': vms_role.role_type}
-    except (ServiceAccess.DoesNotExist, VmsRole.DoesNotExist):
+    """Get employee's VMS role if they have VMS access.
+    Catalog-driven: reads the employee's tenant-scoped EmployeeRole for the
+    'vms' service (see permissions.vms_catalog), not the removed VmsRole model.
+    """
+    if not has_service_access(employee, 'vms'):
         return None
+    from permissions.vms_catalog import get_employee_vms_role_type
+    role_type = get_employee_vms_role_type(employee)
+    if not role_type:
+        return None
+    return {'role_type': role_type}
 
 
 def get_employee_permissions(employee, service_name):

@@ -12,7 +12,7 @@ Adding a new service: insert a row into Service table — no code change needed.
 import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
-from employees.models import Employee
+from employees.models import Employee, Tenant
 from employees.utils import SoftDeleteModel
 
 
@@ -35,6 +35,74 @@ class Service(models.Model):
         return f"{self.code} — {self.name}"
 
 
+class Subscription(SoftDeleteModel):
+    """
+    Gate: which services a Tenant (paying customer) has purchased.
+    Generalizes ServiceAccess — ServiceAccess grants an individual employee
+    access WITHIN a service the employee's tenant is subscribed to.
+
+    A request for a service the tenant did NOT subscribe to must be rejected
+    even if the individual employee has ServiceAccess/roles for it.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='subscriptions',
+    )
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.PROTECT,
+        related_name='subscriptions',
+    )
+
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('trial', 'Trial'),
+        ('suspended', 'Suspended'),
+        ('cancelled', 'Cancelled'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+
+    started_at = models.DateTimeField(auto_now_add=True)
+    ends_at = models.DateTimeField(null=True, blank=True, help_text="Null = no fixed end date")
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "Subscription"
+        verbose_name_plural = "Subscriptions"
+        db_table = "permissions_subscription"
+        unique_together = [("tenant", "service")]
+
+    def __str__(self):
+        return f"{self.tenant.tenant_code} → {self.service.code} ({self.status})"
+
+    @property
+    def is_active(self):
+        from django.utils import timezone
+        if self.status != 'active':
+            return False
+        if self.ends_at and self.ends_at < timezone.now():
+            return False
+        return True
+
+    @classmethod
+    def tenant_has_active(cls, tenant_id, service_code: str) -> bool:
+        """Does this tenant have an active, non-expired subscription for this service?"""
+        if not tenant_id:
+            return False
+        from django.utils import timezone
+        qs = cls.objects.filter(
+            tenant_id=tenant_id,
+            service__code=service_code,
+            status='active',
+            is_deleted=False,
+        )
+        now = timezone.now()
+        return qs.filter(models.Q(ends_at__isnull=True) | models.Q(ends_at__gte=now)).exists()
+
+
 class ServiceAccess(SoftDeleteModel):
     """
     Tracks which employees/superadmins have access to which services.
@@ -43,7 +111,7 @@ class ServiceAccess(SoftDeleteModel):
     1. Employee/SuperAdmin created → No service access by default
     2. Admin grants SIS access → Can login to SIS
     3. Admin grants HDMS access → Must also assign HdmsRole
-    4. Admin grants VMS access → Must also assign VmsRole
+    4. Admin grants VMS access → Must also assign a catalog Role (see permissions.vms_catalog)
 
     Example:
     - Ahmed (Teacher) → SIS Access ✓ → Logs in as Teacher (from designation)
@@ -133,6 +201,13 @@ class ServiceAccess(SoftDeleteModel):
             raise ValidationError("Cannot link to both Employee and SuperAdmin")
         if self.service and not Service.objects.filter(code=self.service, is_active=True).exists():
             raise ValidationError(f"Service '{self.service}' does not exist or is inactive.")
+        # Tenant gate: employee's tenant must have an active Subscription for this service.
+        # Legacy employees without a tenant (pre-multi-tenant data) are left unchecked.
+        if self.employee and self.employee.tenant_id and self.service:
+            if not Subscription.tenant_has_active(self.employee.tenant_id, self.service):
+                raise ValidationError(
+                    f"Tenant '{self.employee.tenant.tenant_code}' has no active subscription for '{self.service}'."
+                )
 
     def __str__(self):
         status = "Active" if self.is_active else "Inactive"
@@ -272,54 +347,6 @@ class HdmsRole(SoftDeleteModel):
         super().save(*args, **kwargs)
 
 
-class VmsRole(SoftDeleteModel):
-    """
-    VMS-specific role assignments.
-
-    Roles:
-    - admin: Full VMS access, manage users and settings
-    - receptionist: Check-in/out visitors, manage visits
-    - security_staff: View and verify visitor badges, basic check-out
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-
-    service_access = models.OneToOneField(
-        ServiceAccess,
-        on_delete=models.CASCADE,
-        related_name='vms_role',
-        help_text="VMS service access this role is for"
-    )
-
-    ROLE_CHOICES = [
-        ('admin', 'Administrator'),
-        ('receptionist', 'Receptionist'),
-        ('security_staff', 'Security Staff'),
-    ]
-    role_type = models.CharField(max_length=20, choices=ROLE_CHOICES)
-
-    assigned_at = models.DateTimeField(auto_now_add=True)
-
-    assigned_by = models.ForeignKey(
-        Employee,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='assigned_vms_roles',
-    )
-
-    class Meta:
-        verbose_name = "VMS Role"
-        verbose_name_plural = "VMS Roles"
-        db_table = "permissions_vms_role"
-
-    def __str__(self):
-        return f"{self.service_access.employee.full_name} → VMS {self.role_type}"
-
-    def clean(self):
-        if self.service_access and self.service_access.service != 'vms':
-            raise ValidationError('VmsRole can only be assigned to VMS service access.')
-
-
 class PermissionAudit(models.Model):
     """
     Audit log for permission changes.
@@ -412,11 +439,38 @@ class Permission(models.Model):
 
 
 class Role(SoftDeleteModel):
-    """Named bundle of permissions. Created and managed by admins at runtime."""
+    """Named bundle of permissions. Created and managed by admins at runtime.
+
+    Legacy generic roles (pre-multi-tenant) carry only `service` (charfield)
+    and leave `tenant`/`service_catalog` null. Catalog-driven, tenant-scoped
+    roles (e.g. VMS default role templates cloned per tenant) set all four:
+    `tenant`, `service_catalog`, plus the legacy `service` code for back-compat
+    with existing lookups that filter by the string code.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, help_text="e.g. 'HR Manager'")
     service = models.CharField(max_length=20, help_text="Service code this role applies to")
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="roles",
+        help_text="Tenant this role is scoped to. Null = legacy global/template role.",
+    )
+    service_catalog = models.ForeignKey(
+        Service,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="roles",
+        help_text="Service this role is scoped to (FK). Null = legacy role predating the catalog.",
+    )
     is_default = models.BooleanField(default=False, help_text="Pre-seeded default role")
+    is_template = models.BooleanField(
+        default=False,
+        help_text="Catalog template (tenant=null, service_catalog set) cloned into per-tenant roles.",
+    )
     description = models.TextField(blank=True, default="")
     permissions = models.ManyToManyField(
         Permission,
@@ -427,7 +481,21 @@ class Role(SoftDeleteModel):
 
     class Meta:
         db_table = "permissions_rbac_role"
-        unique_together = [("name", "service")]
+        # Postgres treats NULL as distinct in unique_together, so a plain
+        # ("name", "service", "tenant") constraint would NOT catch duplicate
+        # legacy global roles (tenant=NULL). Two partial constraints instead.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "service"],
+                condition=models.Q(tenant__isnull=True),
+                name="uniq_role_name_service_global",
+            ),
+            models.UniqueConstraint(
+                fields=["name", "service", "tenant"],
+                condition=models.Q(tenant__isnull=False),
+                name="uniq_role_name_service_tenant",
+            ),
+        ]
         ordering = ["service", "name"]
 
     def __str__(self):

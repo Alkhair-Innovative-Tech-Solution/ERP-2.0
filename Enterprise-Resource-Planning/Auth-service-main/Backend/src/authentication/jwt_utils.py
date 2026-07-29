@@ -43,8 +43,19 @@ def generate_access_token(user, **kwargs) -> str:
     """
     Generate JWT access token signed with RSA private key.
 
-    Token claims: user_id, code, full_name, email, is_superadmin,
-                  is_active, exp, iat, token_type, sub, jti
+    Identity claims: user_id, code, full_name, email, is_superadmin, is_active,
+                      exp, iat, token_type, sub, jti, employee_code, employee_id
+    Multi-tenant/authorization claims: tenant_id, services, perms, perm_version
+      - tenant_id: the employee's tenant (null for superadmin — not tenant-scoped)
+      - services: service codes the tenant has an ACTIVE subscription for
+                  (superadmin gets every active service — bypasses the gate anyway)
+      - perms: effective global permission codenames (["*"] sentinel for superadmin)
+      - perm_version: monotonic counter — downstream services use it to detect a
+                      token minted before a permission change (see permissions.rbac)
+
+    HR fields (department/designation) are deliberately NOT included — this token
+    is an auth/authorization artifact, not an HR profile. Consumers needing HR data
+    should call the employees API.
     """
     is_superadmin = getattr(user, 'is_superadmin', False)
 
@@ -63,18 +74,50 @@ def generate_access_token(user, **kwargs) -> str:
     }
 
     if hasattr(user, 'employee_code'):
-        dept = getattr(user, 'department', None)
-        pos = getattr(user, 'designation', None)
         payload.update({
             'employee_code': user.employee_code,
             'employee_id': getattr(user, 'employee_id', None),
-            'department_id': str(dept.id) if dept else None,
-            'department_name': dept.dept_name if dept else 'N/A',
-            'designation': pos.position_name if pos else 'N/A',
         })
+
+    payload.update(_build_authz_claims(user, is_superadmin))
 
     payload.update(kwargs)
     return jwt.encode(payload, JWT_PRIVATE_KEY, algorithm=JWT_ALGORITHM)
+
+
+def _build_authz_claims(user, is_superadmin: bool) -> dict:
+    """tenant_id / services / perms / perm_version claims.
+    Imported lazily to avoid a circular import at Django app-loading time
+    (permissions.rbac already imports authentication.superadmin_models)."""
+    from django.db.models import Q
+    from django.utils import timezone
+    from permissions.models import Service, Subscription
+    from permissions.rbac import get_effective_permissions, get_perm_version
+
+    if is_superadmin:
+        return {
+            'tenant_id': None,
+            'services': list(Service.objects.filter(is_active=True).values_list('code', flat=True)),
+            'perms': ['*'],
+            'perm_version': 0,
+        }
+
+    tenant_id = getattr(user, 'tenant_id', None)
+    services = []
+    if tenant_id:
+        now = timezone.now()
+        services = list(
+            Subscription.objects.filter(tenant_id=tenant_id, status='active', is_deleted=False)
+            .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))
+            .values_list('service__code', flat=True)
+        )
+
+    return {
+        'tenant_id': str(tenant_id) if tenant_id else None,
+        'services': services,
+        'perms': sorted(get_effective_permissions(str(user.id))),
+        'perm_version': get_perm_version(str(user.id)),
+    }
 
 
 def generate_refresh_token(user) -> str:

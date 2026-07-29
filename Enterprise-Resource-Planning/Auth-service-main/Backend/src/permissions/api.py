@@ -9,7 +9,7 @@ Endpoints:
 """
 from pydantic import BaseModel
 import re
-from permissions.models import ServiceAccess, HdmsRole, VmsRole, Service
+from permissions.models import ServiceAccess, HdmsRole, Service
 from authentication.models import UserCredentials
 from employees.models import Employee
 from django.http import HttpRequest
@@ -462,7 +462,8 @@ def grant_vms_access(request, payload: GrantVmsAccessSchema):
     """
     Grant VMS access to an employee with a role.
 
-    Creates UserCredentials (if not exists), ServiceAccess for VMS, and VmsRole.
+    Creates UserCredentials (if not exists), ServiceAccess for VMS, and a
+    catalog-driven tenant EmployeeRole (see permissions.vms_catalog).
     """
     password = payload.password
     if len(password) < 6:
@@ -486,15 +487,11 @@ def grant_vms_access(request, payload: GrantVmsAccessSchema):
     is_new_user = False
     existing_access = False
 
+    from permissions.vms_catalog import assign_employee_vms_role
+
     try:
         service_access = ServiceAccess.objects.get(employee=employee, service='vms')
         existing_access = True
-
-        if hasattr(service_access, 'vms_role'):
-            vms_role = service_access.vms_role
-            if vms_role.role_type != payload.role:
-                vms_role.role_type = payload.role
-                vms_role.save()
 
         if not service_access.is_active:
             service_access.is_active = True
@@ -506,8 +503,9 @@ def grant_vms_access(request, payload: GrantVmsAccessSchema):
             service='vms',
             is_active=True
         )
-        VmsRole.objects.create(service_access=service_access, role_type=payload.role)
         is_new_user = True
+
+    assign_employee_vms_role(employee, payload.role)
 
     try:
         credentials = UserCredentials.objects.get(employee=employee)
@@ -549,12 +547,13 @@ def check_employee_vms_access(request, employee_id: str):
     except Employee.DoesNotExist:
         return 404, {"error": f"Employee '{employee_id}' not found"}
 
+    from permissions.vms_catalog import get_employee_vms_role_type
+
     try:
         service_access = ServiceAccess.objects.get(employee=employee, service='vms', is_active=True)
-        role = service_access.vms_role.role_type if hasattr(service_access, 'vms_role') else None
         return 200, {
             "has_access": True,
-            "role": role,
+            "role": get_employee_vms_role_type(employee),
             "employee_id": employee.employee_id,
             "employee_code": employee.employee_code,
             "full_name": employee.full_name,
@@ -573,11 +572,12 @@ def check_employee_vms_access(request, employee_id: str):
 @require_permission("service_access.view")
 def get_vms_role_info(request: HttpRequest):
     """Get VMS role for the authenticated employee."""
+    from permissions.vms_catalog import get_employee_vms_role_type
+
     employee = request.auth
     try:
-        service_access = ServiceAccess.objects.get(employee=employee, service='vms', is_active=True)
-        role_type = service_access.vms_role.role_type if hasattr(service_access, 'vms_role') else None
-        return 200, {"has_access": True, "role_type": role_type}
+        ServiceAccess.objects.get(employee=employee, service='vms', is_active=True)
+        return 200, {"has_access": True, "role_type": get_employee_vms_role_type(employee)}
     except ServiceAccess.DoesNotExist:
         return 200, {"has_access": False, "role_type": None}
 
@@ -599,18 +599,15 @@ def list_vms_users(
     elif status == 'inactive':
         service_accesses = service_accesses.filter(is_active=False)
 
+    from permissions.vms_catalog import get_employee_vms_role_type
+
     users = []
     for sa in service_accesses:
         employee = sa.employee
         if employee.is_deleted:
             continue
 
-        role_type = None
-        try:
-            if hasattr(sa, 'vms_role'):
-                role_type = sa.vms_role.role_type
-        except Exception:
-            pass
+        role_type = get_employee_vms_role_type(employee)
 
         if role and role_type != role:
             continue

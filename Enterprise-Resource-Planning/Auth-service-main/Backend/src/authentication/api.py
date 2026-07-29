@@ -15,7 +15,7 @@ from ninja.security import HttpBearer
 from datetime import datetime, timedelta
 from django.utils import timezone
 from employees.models import Employee
-from permissions.models import ServiceAccess, HdmsRole, VmsRole
+from permissions.models import ServiceAccess, HdmsRole, Subscription
 from .models import UserCredentials, RefreshToken, BlacklistedToken
 from .superadmin_models import SuperAdmin
 from .jwt_utils import (
@@ -504,6 +504,12 @@ def login_vms(request: HttpRequest, payload: HdmsLoginRequest):
         credentials.record_failed_login()
         return 401, {"error": "invalid_credentials", "detail": "Incorrect password"}
 
+    # Enforcement order: credentials valid (above) -> tenant subscribed -> service
+    # access granted -> role assigned. SuperAdmin bypasses this whole endpoint by
+    # using /api/auth/login instead — login-vms is employee-only.
+    if not Subscription.tenant_has_active(employee.tenant_id, 'vms'):
+        return 403, {"error": "tenant_not_subscribed", "detail": "Your organization does not have an active VMS subscription."}
+
     try:
         service_access = ServiceAccess.objects.get(
             employee=employee,
@@ -514,16 +520,16 @@ def login_vms(request: HttpRequest, payload: HdmsLoginRequest):
     except ServiceAccess.DoesNotExist:
         return 403, {"error": "no_vms_access", "detail": "You don't have VMS access. Contact admin."}
 
-    try:
-        vms_role = service_access.vms_role
-    except VmsRole.DoesNotExist:
+    from permissions.vms_catalog import get_employee_vms_role_type
+    role_type = get_employee_vms_role_type(employee)
+    if not role_type:
         return 403, {"error": "no_vms_role", "detail": "No VMS role assigned. Contact admin."}
 
     client_ip = request.META.get('REMOTE_ADDR')
     user_agent = request.META.get('HTTP_USER_AGENT', '')
     credentials.record_successful_login(ip_address=client_ip)
 
-    access_token = generate_access_token(employee, role=vms_role.role_type)
+    access_token = generate_access_token(employee, role=role_type)
     refresh_token_str = generate_refresh_token(employee)
 
     RefreshToken.objects.create(
@@ -545,7 +551,7 @@ def login_vms(request: HttpRequest, payload: HdmsLoginRequest):
             "name": employee.full_name,
             "email": employee.email or "",
             "department": employee.department.dept_name if employee.department else "",
-            "vms_role": vms_role.role_type,
+            "vms_role": role_type,
         }
     }
 

@@ -5,7 +5,7 @@ Covers Grant HDMS Access functionality.
 import pytest
 import json
 from django.test import Client
-from permissions.models import ServiceAccess, HdmsRole
+from permissions.models import ServiceAccess
 from authentication.models import UserCredentials
 
 
@@ -36,10 +36,9 @@ class TestGrantHdmsAccessAPI:
             is_active=True
         ).exists()
         
-        # Verify HdmsRole created
-        service_access = ServiceAccess.objects.get(employee=sample_employee, service='hdms')
-        assert hasattr(service_access, 'hdms_role')
-        assert service_access.hdms_role.role_type == 'requestor'
+        # Verify the catalog-driven EmployeeRole was assigned (replaces HdmsRole)
+        from permissions.hdms_catalog import get_employee_hdms_role_type
+        assert get_employee_hdms_role_type(sample_employee) == 'requestor'
         
         # Verify UserCredentials created
         assert UserCredentials.objects.filter(employee=sample_employee).exists()
@@ -177,13 +176,13 @@ class TestGrantHdmsAccessAPI:
             content_type='application/json'
         )
         assert response.status_code == 201
-        
-        # Check permissions
-        service_access = ServiceAccess.objects.get(employee=sample_employee, service='hdms')
-        hdms_role = service_access.hdms_role
-        assert hdms_role.can_view_all_tickets == True
-        assert hdms_role.can_assign_tickets == True
-        assert hdms_role.can_close_tickets == True
+
+        # Check permissions (catalog-driven — replaces HdmsRole booleans)
+        from permissions.utils import get_hdms_role
+        hdms_role = get_hdms_role(sample_employee)
+        assert hdms_role['can_view_all_tickets'] == True
+        assert hdms_role['can_assign_tickets'] == True
+        assert hdms_role['can_close_tickets'] == True
 
 
 class TestCheckHdmsAccessAPI:

@@ -12,7 +12,7 @@ django.setup()
 
 from employees.models import Department, Designation, Employee
 from authentication.models import UserCredentials
-from permissions.models import ServiceAccess, HdmsRole
+from permissions.models import ServiceAccess
 
 BASE_URL = "http://localhost:8000/api"
 
@@ -138,10 +138,9 @@ def run_test():
         service='hdms',
         defaults={'is_active': True}
     )
-    HdmsRole.objects.get_or_create(
-        service_access=sa_hdms,
-        defaults={'role_type': 'moderator'}
-    )
+    # Catalog-driven role assignment (replaces HdmsRole.objects.get_or_create)
+    from permissions.hdms_catalog import assign_employee_hdms_role
+    assign_employee_hdms_role(emp, 'moderator')
     print("Granted HDMS Access + Moderator Role")
 
     # ==========================================

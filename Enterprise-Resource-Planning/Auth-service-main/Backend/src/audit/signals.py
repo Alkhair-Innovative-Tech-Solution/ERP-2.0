@@ -6,7 +6,7 @@ from django.db.models.signals import post_save, pre_delete, pre_save
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
 from employees.models import Employee, Department
-from permissions.models import ServiceAccess, HdmsRole
+from permissions.models import ServiceAccess
 from authentication.models import SuperAdmin
 from .models import AuditLog
 from .middleware import get_current_user, get_current_ip
@@ -204,31 +204,6 @@ def log_service_access_change(sender, instance, created, **kwargs):
         changed_by_superadmin=get_superadmin_from_request(),
         ip_address=get_current_ip(),
         notes=f"Service access to {instance.service} for {user_name} was {action}d"
-    )
-
-
-@receiver(post_save, sender=HdmsRole)
-def log_hdms_role_change(sender, instance, created, **kwargs):
-    """Log HDMS role assignments"""
-    content_type = ContentType.objects.get_for_model(HdmsRole)
-    action = 'create' if created else 'update'
-    changed_by = instance.assigned_by if created else get_employee_from_request()
-    
-    # Identify the user name for the notes
-    user_name = "Unknown"
-    if instance.service_access.employee:
-        user_name = instance.service_access.employee.full_name
-    elif instance.service_access.superadmin:
-        user_name = instance.service_access.superadmin.full_name
-
-    AuditLog.objects.create(
-        content_type=content_type,
-        object_id=str(instance.id),
-        action=action,
-        changed_by=changed_by,
-        changed_by_superadmin=get_superadmin_from_request(),
-        ip_address=get_current_ip(),
-        notes=f"HDMS role {instance.role_type} for {user_name} was {action}d"
     )
 
 

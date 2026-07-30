@@ -15,7 +15,7 @@ from ninja.security import HttpBearer
 from datetime import datetime, timedelta
 from django.utils import timezone
 from employees.models import Employee
-from permissions.models import ServiceAccess, HdmsRole, Subscription
+from permissions.models import ServiceAccess, Subscription
 from .models import UserCredentials, RefreshToken, BlacklistedToken
 from .superadmin_models import SuperAdmin
 from .jwt_utils import (
@@ -354,16 +354,12 @@ class HdmsErrorResponse(Schema):
 @router.post("/login-hdms", response={200: HdmsLoginResponse, 401: HdmsErrorResponse, 403: HdmsErrorResponse, 423: HdmsErrorResponse})
 def login_hdms(request: HttpRequest, payload: HdmsLoginRequest):
     """
-    Login to HDMS with role validation.
-    
-    Validates:
-    1. Employee credentials
-    2. HDMS service access exists
-    
-    Returns user info with role and permissions.
+    Login to HDMS with service access + catalog role validation.
+
+    Validates employee credentials and HDMS service access. Returns JWT
+    with hdms role included. Mirrors login_vms exactly — see that endpoint
+    for the enforcement-order rationale.
     """
-    
-    # Get employee by employee_code
     try:
         employee = Employee.objects.get(
             employee_code=payload.employee_code,
@@ -371,36 +367,26 @@ def login_hdms(request: HttpRequest, payload: HdmsLoginRequest):
             is_deleted=False
         )
     except Employee.DoesNotExist:
-        return 401, {
-            "error": "invalid_credentials",
-            "detail": "Employee code not found or account inactive"
-        }
-    
-    # Get user credentials
+        return 401, {"error": "invalid_credentials", "detail": "Employee code not found or account inactive"}
+
     try:
         credentials = UserCredentials.objects.get(employee=employee, is_deleted=False)
     except UserCredentials.DoesNotExist:
-        return 401, {
-            "error": "invalid_credentials",
-            "detail": "No credentials found for this employee"
-        }
-    
-    # Check if account is locked
+        return 401, {"error": "invalid_credentials", "detail": "No credentials found for this employee"}
+
     if credentials.is_locked():
-        return 423, {
-            "error": "account_locked",
-            "detail": f"Too many failed attempts. Try again after {credentials.locked_until}"
-        }
-    
-    # Verify password
+        return 423, {"error": "account_locked", "detail": f"Too many failed attempts. Try again after {credentials.locked_until}"}
+
     if not credentials.check_password(payload.password):
         credentials.record_failed_login()
-        return 401, {
-            "error": "invalid_credentials",
-            "detail": "Incorrect password"
-        }
-    
-    # Check HDMS service access
+        return 401, {"error": "invalid_credentials", "detail": "Incorrect password"}
+
+    # Enforcement order: credentials valid (above) -> tenant subscribed -> service
+    # access granted -> role assigned. SuperAdmin bypasses this whole endpoint by
+    # using /api/auth/login instead — login-hdms is employee-only.
+    if not Subscription.tenant_has_active(employee.tenant_id, 'hdms'):
+        return 403, {"error": "tenant_not_subscribed", "detail": "Your organization does not have an active HDMS subscription."}
+
     try:
         service_access = ServiceAccess.objects.get(
             employee=employee,
@@ -409,32 +395,20 @@ def login_hdms(request: HttpRequest, payload: HdmsLoginRequest):
             is_deleted=False
         )
     except ServiceAccess.DoesNotExist:
-        return 403, {
-            "error": "no_hdms_access",
-            "detail": "You don't have HDMS access. Contact admin."
-        }
-    
-    # Get HDMS role
-    try:
-        hdms_role = service_access.hdms_role
-    except HdmsRole.DoesNotExist:
-        return 403, {
-            "error": "no_hdms_role",
-            "detail": "No HDMS role assigned. Contact admin."
-        }
-    
-    # Get client IP
+        return 403, {"error": "no_hdms_access", "detail": "You don't have HDMS access. Contact admin."}
+
+    from permissions.hdms_catalog import get_employee_hdms_role_type
+    role_type = get_employee_hdms_role_type(employee)
+    if not role_type:
+        return 403, {"error": "no_hdms_role", "detail": "No HDMS role assigned. Contact admin."}
+
     client_ip = request.META.get('REMOTE_ADDR')
     user_agent = request.META.get('HTTP_USER_AGENT', '')
-    
-    # Record successful login
     credentials.record_successful_login(ip_address=client_ip)
-    
-    # Generate tokens with specific HDMS role
-    access_token = generate_access_token(employee, role=hdms_role.role_type)
+
+    access_token = generate_access_token(employee, role=role_type)
     refresh_token_str = generate_refresh_token(employee)
-    
-    # Store refresh token in database
+
     RefreshToken.objects.create(
         employee=employee,
         token=refresh_token_str,
@@ -442,25 +416,32 @@ def login_hdms(request: HttpRequest, payload: HdmsLoginRequest):
         device_info=user_agent[:255],
         ip_address=client_ip
     )
-    
-    # Build user response with permissions
+
+    # Back-compat: old response shape exposed 4 booleans derived from HdmsRole
+    # fields. Now derived from the employee's actual catalog permissions
+    # (permissions.rbac — the same effective-permissions engine used to
+    # build the token's `perms` claim), so downstream consumers relying on
+    # this shape keep working without changes.
+    from permissions.rbac import get_effective_permissions
+    effective_perms = get_effective_permissions(str(employee.id))
+
     return 200, {
         "access_token": access_token,
         "refresh_token": refresh_token_str,
-        "expires_in": 3600,  # 1 hour
+        "expires_in": 3600,
         "user": {
             "id": str(employee.id),
             "employee_id": employee.employee_id,
             "employee_code": employee.employee_code,
             "name": employee.full_name,
             "email": employee.email or "",
-            "department": employee.department.dept_name,
-            "role": hdms_role.role_type,
+            "department": employee.department.dept_name if employee.department else "",
+            "role": role_type,
             "permissions": {
-                "can_view_all_tickets": hdms_role.can_view_all_tickets,
-                "can_assign_tickets": hdms_role.can_assign_tickets,
-                "can_close_tickets": hdms_role.can_close_tickets,
-                "can_manage_users": hdms_role.can_manage_users
+                "can_view_all_tickets": "hdms.ticket.view_all" in effective_perms,
+                "can_assign_tickets": "hdms.ticket.assign" in effective_perms,
+                "can_close_tickets": "hdms.ticket.close" in effective_perms,
+                "can_manage_users": "hdms.user.manage" in effective_perms,
             }
         }
     }

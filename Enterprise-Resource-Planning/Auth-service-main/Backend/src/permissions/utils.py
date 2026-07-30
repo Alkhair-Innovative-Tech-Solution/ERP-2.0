@@ -6,7 +6,7 @@ Used by authentication APIs and middleware to verify:
 - What is employee's role in HDMS?
 - What permissions does employee have?
 """
-from permissions.models import ServiceAccess, HdmsRole
+from permissions.models import ServiceAccess
 
 
 def has_service_access(employee, service_name):
@@ -49,35 +49,29 @@ def get_service_accesses(employee):
 
 
 def get_hdms_role(employee):
+    """Get employee's HDMS role if they have HDMS access.
+    Catalog-driven: reads the employee's tenant-scoped EmployeeRole for the
+    'hdms' service (see permissions.hdms_catalog), not the removed HdmsRole
+    model. The three boolean flags are derived from the same effective-
+    permissions engine used to build the JWT's `perms` claim, kept for
+    response-shape back-compat.
     """
-    Get employee's HDMS role if they have HDMS access.
-    
-    Returns:
-        dict with role_type and permissions, or None if no HDMS access
-    """
-    try:
-        # Check if has HDMS access
-        access = ServiceAccess.objects.get(
-            employee=employee,
-            service='hdms',
-            is_active=True,
-            is_deleted=False
-        )
-        
-        # Get HDMS role
-        hdms_role = HdmsRole.objects.get(
-            service_access=access,
-            is_deleted=False
-        )
-        
-        return {
-            'role_type': hdms_role.role_type,
-            'can_view_all_tickets': hdms_role.can_view_all_tickets,
-            'can_assign_tickets': hdms_role.can_assign_tickets,
-            'can_close_tickets': hdms_role.can_close_tickets
-        }
-    except (ServiceAccess.DoesNotExist, HdmsRole.DoesNotExist):
+    if not has_service_access(employee, 'hdms'):
         return None
+    from permissions.hdms_catalog import get_employee_hdms_role_type
+    role_type = get_employee_hdms_role_type(employee)
+    if not role_type:
+        return None
+
+    from permissions.rbac import get_effective_permissions
+    effective_perms = get_effective_permissions(str(employee.id))
+
+    return {
+        'role_type': role_type,
+        'can_view_all_tickets': 'hdms.ticket.view_all' in effective_perms,
+        'can_assign_tickets': 'hdms.ticket.assign' in effective_perms,
+        'can_close_tickets': 'hdms.ticket.close' in effective_perms,
+    }
 
 
 def get_sis_role(employee):

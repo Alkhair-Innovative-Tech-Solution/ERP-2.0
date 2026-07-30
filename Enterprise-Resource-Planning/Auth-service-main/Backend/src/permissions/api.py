@@ -9,7 +9,7 @@ Endpoints:
 """
 from pydantic import BaseModel
 import re
-from permissions.models import ServiceAccess, HdmsRole, Service
+from permissions.models import ServiceAccess, Service
 from authentication.models import UserCredentials
 from employees.models import Employee
 from django.http import HttpRequest
@@ -184,12 +184,10 @@ def get_sis_role_info(request: HttpRequest):
 def grant_hdms_access(request, payload: GrantHdmsAccessSchema):
     """
     Grant HDMS access to an employee.
-    
-    Creates:
-    1. UserCredentials (if not exists) or updates password
-    2. ServiceAccess for HDMS
-    3. HdmsRole with specified role type
-    
+
+    Creates UserCredentials (if not exists), ServiceAccess for HDMS, and a
+    catalog-driven tenant EmployeeRole (see permissions.hdms_catalog).
+
     Password requirements: Alphanumeric, at least 1 uppercase, 1 lowercase
     """
     # Validate password
@@ -203,39 +201,33 @@ def grant_hdms_access(request, payload: GrantHdmsAccessSchema):
             return 400, {"error": "Password must contain at least one lowercase letter"}
         if not re.match(r'^[A-Za-z0-9]+$', password):
             return 400, {"error": "Password must be alphanumeric only"}
-    
+
     # Validate role
     valid_roles = ['requestor', 'moderator', 'assignee', 'admin']
     if payload.role not in valid_roles:
         return 400, {"error": f"Role must be one of: {', '.join(valid_roles)}"}
-    
+
     # Find employee
     try:
         employee = Employee.objects.get(employee_id=payload.employee_id, is_deleted=False)
     except Employee.DoesNotExist:
         return 400, {"error": f"Employee '{payload.employee_id}' not found"}
-    
+
     is_new_user = False
     existing_access = False
-    
+
+    from permissions.hdms_catalog import assign_employee_hdms_role
+
     # Check if employee already has HDMS access
     try:
         service_access = ServiceAccess.objects.get(employee=employee, service='hdms')
         existing_access = True
-        
-        # Update role if different
-        if hasattr(service_access, 'hdms_role'):
-            hdms_role = service_access.hdms_role
-            old_role = hdms_role.role_type
-            if old_role != payload.role:
-                hdms_role.role_type = payload.role
-                hdms_role.save()
-        
+
         # Reactivate if was inactive
         if not service_access.is_active:
             service_access.is_active = True
             service_access.save()
-            
+
     except ServiceAccess.DoesNotExist:
         # Create new ServiceAccess
         service_access = ServiceAccess.objects.create(
@@ -243,13 +235,9 @@ def grant_hdms_access(request, payload: GrantHdmsAccessSchema):
             service='hdms',
             is_active=True
         )
-        
-        # Create HdmsRole
-        HdmsRole.objects.create(
-            service_access=service_access,
-            role_type=payload.role
-        )
         is_new_user = True
+
+    assign_employee_hdms_role(employee, payload.role)
     
     # Handle UserCredentials
     try:
@@ -299,16 +287,14 @@ def check_employee_hdms_access(request, employee_id: str):
         employee = Employee.objects.get(employee_id=employee_id, is_deleted=False)
     except Employee.DoesNotExist:
         return 404, {"error": f"Employee '{employee_id}' not found"}
-    
+
+    from permissions.hdms_catalog import get_employee_hdms_role_type
+
     try:
         service_access = ServiceAccess.objects.get(employee=employee, service='hdms', is_active=True)
-        role = None
-        if hasattr(service_access, 'hdms_role'):
-            role = service_access.hdms_role.role_type
-        
         return 200, {
             "has_access": True,
-            "role": role,
+            "role": get_employee_hdms_role_type(employee),
             "employee_id": employee.employee_id,
             "employee_code": employee.employee_code,
             "full_name": employee.full_name
@@ -375,23 +361,20 @@ def list_hdms_users(
     elif status == 'inactive':
         service_accesses = service_accesses.filter(is_active=False)
     
+    from permissions.hdms_catalog import get_employee_hdms_role_type
+
     # Build user list
     users = []
     for sa in service_accesses:
         employee = sa.employee
-        
+
         # Skip if employee is deleted
         if employee.is_deleted:
             continue
-            
-        # Get HDMS role
-        role_type = None
-        try:
-            if hasattr(sa, 'hdms_role'):
-                role_type = sa.hdms_role.role_type
-        except:
-            pass
-        
+
+        # Get HDMS role (catalog-driven)
+        role_type = get_employee_hdms_role_type(employee)
+
         # Apply role filter
         if role and role_type != role:
             continue

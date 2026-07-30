@@ -2,7 +2,6 @@ import json
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Q
-from django.contrib.auth import authenticate
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +9,6 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import Visitor, Host, Visit, Employee
@@ -23,6 +21,7 @@ from .utils import get_or_create_visitor, find_existing_visitor, check_duplicate
 from .email_utils import send_host_notification, send_overnight_notification, check_overnight_stays
 from . import auth_service_client as auth_client
 from .auth_service_client import AuthServiceUnavailable
+from central_auth.permissions import ServiceSubscribed, RequiresPermission
 
 
 # ── Auth Views ────────────────────────────────────────────────────────────────
@@ -31,9 +30,12 @@ class VmsLoginView(APIView):
     """
     POST /api/auth/login/
 
-    Proxies login to auth-service. If auth-service is unreachable, falls back
-    to local Django credentials and returns a warning in the response so the
-    frontend can notify the user.
+    Proxies login to auth-service. Login always happens at auth-service —
+    there is no local-credentials fallback (see AUTH_INTEGRATION.md "Fallback
+    decision"): a token minted locally couldn't carry tenant_id/perms/services
+    and couldn't be verified by CentralAuthAuthentication anyway, so it would
+    silently break on the very next authenticated request. If auth-service is
+    unreachable, callers get a clear 503 instead.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -45,51 +47,18 @@ class VmsLoginView(APIView):
         if not employee_code or not password:
             return Response({'error': 'employee_code and password are required.'}, status=400)
 
-        # 1. Try auth-service first
         try:
             data = auth_client.login_vms(employee_code, password)
             return Response({**data, 'auth_source': 'auth_service'})
         except AuthServiceUnavailable:
-            pass  # fall through to local fallback
+            return Response(
+                {'error': 'Auth Service is currently unavailable. Please try again later.', 'auth_service_down': True},
+                status=503,
+            )
         except PermissionError as e:
             return Response({'error': str(e)}, status=403)
         except ValueError as e:
             return Response({'error': str(e)}, status=401)
-
-        # 2. Local Django fallback (auth-service was unreachable)
-        user = authenticate(request, username=employee_code, password=password)
-        if user is None:
-            return Response(
-                {
-                    'error': 'Auth Service is currently unavailable and local credentials are invalid.',
-                    'auth_source': 'local_fallback',
-                },
-                status=401,
-            )
-
-        refresh = SimpleJWTRefreshToken.for_user(user)
-        return Response({
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-            'expires_in': 3600,
-            'user': {
-                'id': str(user.id),
-                'name': user.get_full_name() or user.username,
-                'email': user.email,
-                'vms_role': _get_local_role(user),
-            },
-            'auth_source': 'local_fallback',
-            'warning': 'Auth Service is currently unavailable. You are logged in with local credentials.',
-        })
-
-
-def _get_local_role(user) -> str:
-    groups = set(user.groups.values_list('name', flat=True))
-    if 'admin' in groups or user.is_staff:
-        return 'admin'
-    if 'receptionist' in groups:
-        return 'receptionist'
-    return 'security_staff'
 
 
 class VmsTokenRefreshView(TokenRefreshView):
@@ -345,7 +314,7 @@ def visit_verify(request, identifier):
 # ── Receptionist Entry ────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def receptionist_entry(request):
     serializer = ReceptionistEntrySerializer(data=request.data)
     if not serializer.is_valid():
@@ -362,12 +331,15 @@ def receptionist_entry(request):
             'visitor': VisitorSerializer(existing_v).data,
         }, status=403)
 
+    tenant_id = request.user.tenant_id
+
     visitor, is_returning = get_or_create_visitor(
         full_name=d['full_name'],
         cnic=d.get('cnic'),
         phone=d.get('phone'),
         email=d.get('email'),
         company=d.get('company'),
+        tenant_id=tenant_id,
     )
 
     # Issue #1: Block if already checked in
@@ -381,8 +353,8 @@ def receptionist_entry(request):
             'active_status': active_visit.status,
         }, status=409)
 
-    host = Host.objects.filter(id=d['host_id']).first() if d.get('host_id') else None
-    employee_host = Employee.objects.filter(id=d['employee_host_id']).first() if d.get('employee_host_id') else None
+    host = Host.objects.for_tenant(tenant_id).filter(id=d['host_id']).first() if d.get('host_id') else None
+    employee_host = Employee.objects.for_tenant(tenant_id).filter(id=d['employee_host_id']).first() if d.get('employee_host_id') else None
 
     # Issue #8: expected_checkout_at is required
     if not d.get('expected_checkout_at'):
@@ -407,10 +379,11 @@ def receptionist_entry(request):
         entry_type=Visit.EntryType.RECEPTIONIST,
         checked_in_at=timezone.now(),
         expected_checkout_at=d.get('expected_checkout_at'),
-        approved_by=request.user,
+        approved_by=request.user.employee_code,
         notes=d.get('notes'),
         is_returning=is_returning,
         internal_department=d.get('internal_department'),
+        tenant_id=tenant_id,
     )
 
     if (host or employee_host) and visit.purpose != 'internal':
@@ -429,10 +402,10 @@ def receptionist_entry(request):
 # ── Approve / Reject ──────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def approve_visit(request, visit_id):
     try:
-        visit = Visit.objects.get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
 
@@ -450,14 +423,14 @@ def approve_visit(request, visit_id):
     # If visitor selected "Other" host — receptionist assigns employee now
     emp_id = request.data.get('employee_host_id')
     if emp_id:
-        emp = Employee.objects.filter(id=emp_id).first()
+        emp = Employee.objects.for_tenant(request.user.tenant_id).filter(id=emp_id).first()
         if emp:
             visit.employee_host = emp
             visit.host_name_manual = None
 
     visit.status = Visit.Status.CHECKED_IN
     visit.checked_in_at = timezone.now()
-    visit.approved_by = request.user
+    visit.approved_by = request.user.employee_code
     if expected_checkout:
         visit.expected_checkout_at = expected_checkout
     visit.save()
@@ -474,10 +447,10 @@ def approve_visit(request, visit_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def reject_visit(request, visit_id):
     try:
-        visit = Visit.objects.get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
     visit.status = Visit.Status.REJECTED
@@ -490,10 +463,10 @@ def reject_visit(request, visit_id):
 # ── Checkout ──────────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.checkout')])
 def checkout_visit(request, visit_id):
     try:
-        visit = Visit.objects.get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
 
@@ -552,18 +525,20 @@ def scheduled_entry(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def schedule_visit(request):
     serializer = ScheduleVisitSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
     d = serializer.validated_data
+    tenant_id = request.user.tenant_id
     visitor, is_returning = get_or_create_visitor(
         full_name=d['full_name'], cnic=d.get('cnic'),
         phone=d.get('phone'), email=d.get('email'), company=d.get('company'),
+        tenant_id=tenant_id,
     )
-    host = Host.objects.filter(id=d['host_id']).first() if d.get('host_id') else None
-    employee_host = Employee.objects.filter(id=d['employee_host_id']).first() if d.get('employee_host_id') else None
+    host = Host.objects.for_tenant(tenant_id).filter(id=d['host_id']).first() if d.get('host_id') else None
+    employee_host = Employee.objects.for_tenant(tenant_id).filter(id=d['employee_host_id']).first() if d.get('employee_host_id') else None
     visit = Visit.objects.create(
         visitor=visitor,
         host=host,
@@ -586,6 +561,7 @@ def schedule_visit(request):
         expected_checkout_at=d.get('expected_checkout_at'),
         notes=d.get('notes'),
         is_returning=is_returning,
+        tenant_id=tenant_id,
     )
     return Response({'visit_id': str(visit.id), 'visiting_id': visit.visiting_id, 'visitor_name': visitor.full_name, 'scheduled_at': visit.scheduled_at}, status=201)
 
@@ -593,15 +569,15 @@ def schedule_visit(request):
 # ── Update host on "Other" visits ─────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def update_visit_host(request, visit_id):
     try:
-        visit = Visit.objects.get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
     emp_id = request.data.get('employee_host_id')
     if emp_id:
-        emp = Employee.objects.filter(id=emp_id).first()
+        emp = Employee.objects.for_tenant(request.user.tenant_id).filter(id=emp_id).first()
         if emp:
             visit.employee_host = emp
             visit.host_name_manual = None
@@ -612,11 +588,11 @@ def update_visit_host(request, visit_id):
 # ── Overwrite visit fields (Issue #11) ─────────────────────────────────────────
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def overwrite_visit(request, visit_id):
     """Receptionist can overwrite any visit field."""
     try:
-        visit = Visit.objects.get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
 
@@ -632,12 +608,12 @@ def overwrite_visit(request, visit_id):
 
     # Handle host update
     if 'host_id' in request.data:
-        host = Host.objects.filter(id=request.data['host_id']).first()
+        host = Host.objects.for_tenant(request.user.tenant_id).filter(id=request.data['host_id']).first()
         visit.host = host
         visit.employee_host = None
         visit.host_name_manual = None
     if 'employee_host_id' in request.data:
-        emp = Employee.objects.filter(id=request.data['employee_host_id']).first()
+        emp = Employee.objects.for_tenant(request.user.tenant_id).filter(id=request.data['employee_host_id']).first()
         visit.employee_host = emp
         visit.host = None
         visit.host_name_manual = None
@@ -666,9 +642,9 @@ def overwrite_visit(request, visit_id):
 # ── Visitor Lists ─────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.view_own')])
 def visit_list(request):
-    visits = Visit.objects.select_related('visitor', 'host', 'employee_host').all()
+    visits = Visit.objects.for_tenant(request.user.tenant_id).select_related('visitor', 'host', 'employee_host')
     s = request.query_params.get('status')
     if s:
         visits = visits.filter(status=s)
@@ -687,31 +663,31 @@ def visit_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.view_own')])
 def visit_detail(request, visit_id):
     try:
-        visit = Visit.objects.select_related('visitor', 'host', 'employee_host', 'approved_by').get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).select_related('visitor', 'host', 'employee_host').get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
     return Response(VisitDetailSerializer(visit).data)
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.view')])
 def search_visitor(request):
     q = request.query_params.get('q', '').strip()
     if not q:
         return Response({'results': []})
-    visitors = Visitor.objects.filter(
+    visitors = Visitor.objects.for_tenant(request.user.tenant_id).filter(
         Q(cnic__icontains=q) | Q(phone__icontains=q) | Q(email__icontains=q) | Q(full_name__icontains=q)
     )[:10]
     return Response({'results': VisitorSerializer(visitors, many=True).data})
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.view')])
 def visitor_list(request):
-    visitors = Visitor.objects.all()
+    visitors = Visitor.objects.for_tenant(request.user.tenant_id)
     bl = request.query_params.get('blacklisted')
     if bl:
         visitors = visitors.filter(is_blacklisted=bl.lower() == 'true')
@@ -725,13 +701,16 @@ def visitor_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.view')])
 def visitor_history(request, visitor_id):
     try:
         visitor = Visitor.objects.get(id=visitor_id)
     except Visitor.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
-    visits = Visit.objects.filter(visitor=visitor).select_related('host', 'employee_host')
+    # Visitor identity is shared across tenants (globally-unique CNIC — see
+    # utils.get_or_create_visitor), but each Visit transaction is tenant-owned:
+    # scope the visit history to the caller's tenant.
+    visits = Visit.objects.for_tenant(request.user.tenant_id).filter(visitor=visitor).select_related('host', 'employee_host')
 
     # Issue #2: unique_days = count of distinct calendar days with a visit
     from django.db.models.functions import TruncDate
@@ -753,7 +732,7 @@ def visitor_history(request, visitor_id):
 # ── CNIC instant check ────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.view')])
 def check_cnic_api(request):
     cnic = request.query_params.get('cnic', '').strip()
     if not cnic:
@@ -778,7 +757,7 @@ def check_cnic_api(request):
 # ── Duplicate check ───────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.view')])
 def check_duplicate_api(request):
     """Check if a visitor with same CNIC/phone/email already exists."""
     cnic = request.data.get('cnic')
@@ -810,7 +789,7 @@ def check_duplicate_api(request):
 # ── Blacklist ─────────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.edit')])
 def blacklist_visitor(request, visitor_id):
     try:
         visitor = Visitor.objects.get(id=visitor_id)
@@ -823,7 +802,7 @@ def blacklist_visitor(request, visitor_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.edit')])
 def unblacklist_visitor(request, visitor_id):
     try:
         visitor = Visitor.objects.get(id=visitor_id)
@@ -836,19 +815,21 @@ def unblacklist_visitor(request, visitor_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visitor.view')])
 def blacklisted_visitors(request):
-    return Response(VisitorSerializer(Visitor.objects.filter(is_blacklisted=True), many=True).data)
+    visitors = Visitor.objects.for_tenant(request.user.tenant_id).filter(is_blacklisted=True)
+    return Response(VisitorSerializer(visitors, many=True).data)
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.report.view')])
 def dashboard_stats(request):
+    tenant_visits = Visit.objects.for_tenant(request.user.tenant_id)
     today = timezone.now().date()
-    tv = Visit.objects.filter(created_at__date=today)
-    checked_in_now = Visit.objects.filter(status=Visit.Status.CHECKED_IN)
+    tv = tenant_visits.filter(created_at__date=today)
+    checked_in_now = tenant_visits.filter(status=Visit.Status.CHECKED_IN)
 
     # Active visitors with live duration
     active_visitors = []
@@ -873,12 +854,12 @@ def dashboard_stats(request):
     # Issue #2: frequent visitors by unique days
     from django.db.models.functions import TruncDate
     from django.db.models import Count as DCount
-    most_visited = Visitor.objects.annotate(vc=DCount('visits')).filter(vc__gt=1).order_by('-vc')[:5]
+    most_visited = Visitor.objects.for_tenant(request.user.tenant_id).annotate(vc=DCount('visits')).filter(vc__gt=1).order_by('-vc')[:5]
 
     last_7 = []
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
-        last_7.append({'date': str(day), 'count': Visit.objects.filter(created_at__date=day).count()})
+        last_7.append({'date': str(day), 'count': tenant_visits.filter(created_at__date=day).count()})
 
     purpose_breakdown = [
         {'purpose': p.value, 'label': p.label, 'count': tv.filter(purpose=p.value).count()}
@@ -894,7 +875,7 @@ def dashboard_stats(request):
             'pending_approval': tv.filter(status=Visit.Status.PENDING_APPROVAL).count(),
         },
         'currently_inside': checked_in_now.count(),
-        'pending_approval': Visit.objects.filter(status=Visit.Status.PENDING_APPROVAL).count(),
+        'pending_approval': tenant_visits.filter(status=Visit.Status.PENDING_APPROVAL).count(),
         'avg_duration_minutes': avg_dur,
         'active_visitors': active_visitors,
         'most_visited': VisitorSerializer(most_visited, many=True).data,
@@ -918,7 +899,7 @@ def host_list(request):
 
 # Issue #5: Create host from employee only
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def create_host_from_employee(request):
     """Create a local Host record from an auth-service employee."""
     emp_id = request.data.get('employee_id')
@@ -943,7 +924,7 @@ def create_host_from_employee(request):
     emp_email = emp.get('org_email') or emp.get('personal_email', '')
     emp_phone = emp.get('org_phone') or emp.get('personal_phone', '')
 
-    existing = Host.objects.filter(employee_id=emp_code).first()
+    existing = Host.objects.for_tenant(request.user.tenant_id).filter(employee_id=emp_code).first()
     if existing:
         return Response({'message': 'Host already exists.', 'host': HostSerializer(existing).data})
 
@@ -954,12 +935,13 @@ def create_host_from_employee(request):
         phone=emp_phone,
         email=emp_email,
         is_active=True,
+        tenant_id=request.user.tenant_id,
     )
     return Response(HostSerializer(host).data, status=201)
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def employee_list(request):
     """List employees from auth-service (live, Redis-cached 5 min)."""
     filters = {}
@@ -981,7 +963,7 @@ def employee_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def employee_detail(request, employee_id):
     """Get a single employee from auth-service."""
     try:
@@ -997,7 +979,7 @@ def employee_detail(request, employee_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def department_list(request):
     """List departments from auth-service (live, Redis-cached 5 min)."""
     try:
@@ -1013,11 +995,11 @@ def department_list(request):
 # ── Issue #6: Companies report ────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.report.view')])
 def company_report(request):
     """List all companies that have sent visitors, with counts."""
     companies = (
-        Visitor.objects
+        Visitor.objects.for_tenant(request.user.tenant_id)
         .exclude(company__isnull=True)
         .exclude(company__exact='')
         .values('company')
@@ -1031,7 +1013,7 @@ def company_report(request):
     result = []
     for c in companies:
         last_visit = (
-            Visit.objects
+            Visit.objects.for_tenant(request.user.tenant_id)
             .filter(visitor__company=c['company'])
             .order_by('-created_at')
             .values_list('created_at', flat=True)
@@ -1049,14 +1031,14 @@ def company_report(request):
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.report.view')])
 def check_overnight(request):
     count = check_overnight_stays()
     return Response({'overnight_checks': count})
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.report.view')])
 def export_visits_csv(request):
     import csv
     from django.http import HttpResponse
@@ -1064,7 +1046,7 @@ def export_visits_csv(request):
     response['Content-Disposition'] = 'attachment; filename="visits.csv"'
     writer = csv.writer(response)
     writer.writerow(['Date', 'Visitor', 'CNIC', 'Phone', 'Company', 'Purpose', 'Host', 'Status', 'Check-in', 'Check-out', 'Duration(min)', 'Late'])
-    for v in Visit.objects.select_related('visitor', 'host', 'employee_host').order_by('-created_at')[:2000]:
+    for v in Visit.objects.for_tenant(request.user.tenant_id).select_related('visitor', 'host', 'employee_host').order_by('-created_at')[:2000]:
         host_name = v.employee_host.name if v.employee_host else (v.host.name if v.host else v.host_name_manual or '')
         dur = int((v.checked_out_at - v.checked_in_at).total_seconds() / 60) if v.checked_in_at and v.checked_out_at else ''
         writer.writerow([
@@ -1081,13 +1063,13 @@ def export_visits_csv(request):
 # ── Company detail ─────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.report.view')])
 def company_detail(request, company_name):
     """All visitors and visits from a specific company."""
     from urllib.parse import unquote
     company = unquote(company_name)
-    visitors = Visitor.objects.filter(company__iexact=company)
-    visits = Visit.objects.filter(visitor__company__iexact=company).select_related('visitor', 'host', 'employee_host').order_by('-created_at')
+    visitors = Visitor.objects.for_tenant(request.user.tenant_id).filter(company__iexact=company)
+    visits = Visit.objects.for_tenant(request.user.tenant_id).filter(visitor__company__iexact=company).select_related('visitor', 'host', 'employee_host').order_by('-created_at')
 
     # Purpose breakdown for this company
     purpose_breakdown = {}
@@ -1108,11 +1090,11 @@ def company_detail(request, company_name):
 # ── Card sharing (Issue: email/whatsapp card) ─────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def send_card_email(request, visit_id):
     """Send visitor card by email."""
     try:
-        visit = Visit.objects.select_related('visitor', 'host', 'employee_host').get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).select_related('visitor', 'host', 'employee_host').get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
 
@@ -1128,11 +1110,11 @@ def send_card_email(request, visit_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, ServiceSubscribed, RequiresPermission('vms.visit.create')])
 def whatsapp_card_link(request, visit_id):
     """Generate WhatsApp share link for visitor card."""
     try:
-        visit = Visit.objects.select_related('visitor', 'host', 'employee_host').get(id=visit_id)
+        visit = Visit.objects.for_tenant(request.user.tenant_id).select_related('visitor', 'host', 'employee_host').get(id=visit_id)
     except Visit.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
 

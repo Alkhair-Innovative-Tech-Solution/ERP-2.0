@@ -67,36 +67,6 @@ def login_vms(employee_code: str, password: str) -> dict:
     raise ValueError(resp.json().get('detail', 'Invalid credentials.'))
 
 
-# ── Token Verification ───────────────────────────────────────────────────────
-
-def verify_token(token: str) -> dict | None:
-    """
-    GET /api/auth/me with Bearer token.
-
-    Returns user dict on success, None on invalid token.
-    Caches result for CACHE_TTL seconds per token hash.
-    Raises AuthServiceUnavailable if unreachable.
-    """
-    cache_key = f'vms:token:{hashlib.sha256(token.encode()).hexdigest()}'
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    resp = _get('/api/auth/me', token=token)
-    if resp.status_code != 200:
-        return None
-
-    user_info = resp.json()
-    cache.set(cache_key, user_info, CACHE_TTL)
-    return user_info
-
-
-def invalidate_token_cache(token: str):
-    """Remove cached token verification (call on logout)."""
-    cache_key = f'vms:token:{hashlib.sha256(token.encode()).hexdigest()}'
-    cache.delete(cache_key)
-
-
 # ── Employees ────────────────────────────────────────────────────────────────
 
 def get_employees(filters: dict = None) -> list:

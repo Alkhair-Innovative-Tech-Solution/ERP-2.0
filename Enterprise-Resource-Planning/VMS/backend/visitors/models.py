@@ -1,10 +1,12 @@
 import uuid
 from django.db import models
-from django.contrib.auth.models import User
+
+from central_auth.tenant import TenantManager
 
 
 class Visitor(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     full_name = models.CharField(max_length=200)
     cnic = models.CharField(max_length=15, unique=True, null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
@@ -15,6 +17,8 @@ class Visitor(models.Model):
     blacklist_reason = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = TenantManager()
 
     class Meta:
         indexes = [
@@ -30,12 +34,15 @@ class Visitor(models.Model):
 class Host(models.Model):
     """External hosts - people visitors come to meet."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     name = models.CharField(max_length=200)
     department = models.CharField(max_length=200, null=True, blank=True)
     employee_id = models.CharField(max_length=50, null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+
+    objects = TenantManager()
 
     def __str__(self):
         return f"{self.name} - {self.department}"
@@ -44,6 +51,7 @@ class Host(models.Model):
 class Employee(models.Model):
     """Internal employees - for 'Other' host selection by receptionist."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     name = models.CharField(max_length=200)
     department = models.CharField(max_length=200)
     designation = models.CharField(max_length=200)
@@ -52,6 +60,8 @@ class Employee(models.Model):
     email = models.EmailField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = TenantManager()
 
     class Meta:
         indexes = [
@@ -89,6 +99,7 @@ class Visit(models.Model):
         OTHER = 'other', 'Other'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     visitor = models.ForeignKey(Visitor, on_delete=models.CASCADE, related_name='visits')
     host = models.ForeignKey(Host, on_delete=models.SET_NULL, null=True, blank=True, related_name='visits')
     employee_host = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='visits', help_text="Employee selected as host via 'Other' option")
@@ -114,12 +125,17 @@ class Visit(models.Model):
     checked_out_at = models.DateTimeField(null=True, blank=True)
     is_late = models.BooleanField(default=False, help_text="True if checkout is 30+ minutes late")
     card_expired = models.BooleanField(default=False, help_text="True after checkout - card no longer valid")
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    # Was a FK to django.contrib.auth.models.User; central-auth-authenticated
+    # requests carry a CentralAuthUser (token claims), not a Django User row,
+    # so identity is stored as the employee_code string instead.
+    approved_by = models.CharField(max_length=50, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
     is_returning = models.BooleanField(default=False)
     is_overnight = models.BooleanField(default=False)
     overnight_notified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = TenantManager()
 
     class Meta:
         indexes = [

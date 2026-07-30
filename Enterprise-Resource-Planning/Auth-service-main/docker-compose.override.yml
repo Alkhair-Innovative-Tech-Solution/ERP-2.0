@@ -1,0 +1,6 @@
+# LOCAL DEV ONLY — publishes auth-service port 8000 to the host for curl/Postman testing.
+# Auto-loaded by `docker compose` alongside docker-compose.yml. Do not deploy to prod.
+services:
+  auth-service:
+    ports:
+      - "8000:8000"

@@ -125,11 +125,18 @@ def check_duplicate_combo(cnic=None, phone=None, email=None, exclude_visitor_id=
     return visitors
 
 
-def get_or_create_visitor(full_name, cnic=None, phone=None, email=None, company=None):
+def get_or_create_visitor(full_name, cnic=None, phone=None, email=None, company=None, tenant_id=None):
     """
     Find existing visitor or create new one.
     Returns (visitor, is_returning)
     All inputs are case-insensitive.
+
+    Lookup (find_existing_visitor) is intentionally NOT tenant-scoped: `cnic`
+    is globally unique on Visitor, so there is only ever one row per CNIC
+    regardless of tenant — a repeat visitor is recognized across tenants by
+    design. `tenant_id` is only stamped on newly-created rows. See
+    AUTH_INTEGRATION.md "Tenant filtering — Visitor identity" for the caveat
+    this implies once a second tenant exists.
     """
     # Format and validate inputs
     formatted_cnic = format_cnic(cnic) if cnic else None
@@ -161,5 +168,6 @@ def get_or_create_visitor(full_name, cnic=None, phone=None, email=None, company=
         phone=cleaned_phone or None,
         email=cleaned_email,
         company=cleaned_company,
+        tenant_id=tenant_id,
     )
     return visitor, False

@@ -11,7 +11,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .models import Visitor, Host, Visit, Employee
+from .models import Visitor, Host, Visit, Employee, KioskKey
 from .serializers import (
     VisitorSerializer, HostSerializer, EmployeeSerializer, VisitListSerializer,
     VisitDetailSerializer, ReceptionistEntrySerializer,
@@ -101,12 +101,35 @@ def check_already_checked_in(visitor):
     return active
 
 
+def resolve_kiosk_tenant(kiosk_key):
+    """
+    Resolve a public kiosk's tenant_id from its key (see KioskKey model).
+
+    No key -> (None, None): caller falls back to tenant_id=NULL, same as
+    before kiosk keys existed (safe while a kiosk hasn't been configured
+    with one yet). Unknown/inactive key -> (None, error Response): almost
+    certainly a config error, not a legitimate anonymous submission, so it's
+    rejected rather than silently falling back.
+    """
+    if not kiosk_key:
+        return None, None
+    try:
+        kk = KioskKey.objects.get(key=kiosk_key, is_active=True)
+    except KioskKey.DoesNotExist:
+        return None, Response({'error': 'Invalid or inactive kiosk key.'}, status=400)
+    return kk.tenant_id, None
+
+
 # ── QR Check-in ───────────────────────────────────────────────────────────────
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def qr_checkin(request):
     """Visitor self check-in via QR. Strict identity validation."""
+    tenant_id, kiosk_error = resolve_kiosk_tenant(request.data.get('kiosk_key'))
+    if kiosk_error:
+        return kiosk_error
+
     serializer = QRCheckinSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
@@ -175,6 +198,7 @@ def qr_checkin(request):
         phone=d.get('phone'),
         email=d.get('email'),
         company=d.get('company'),
+        tenant_id=tenant_id,
     )
 
     # After creating/getting visitor, also check by visitor object
@@ -195,7 +219,7 @@ def qr_checkin(request):
     host_is_other = d.get('host_is_other', False) and not is_internal
 
     if not host_is_other and not is_internal and d.get('host_id'):
-        host = Host.objects.filter(id=d['host_id']).first()
+        host = (Host.objects.for_tenant(tenant_id) if tenant_id else Host.objects).filter(id=d['host_id']).first()
 
     visit = Visit.objects.create(
         visitor=visitor,
@@ -216,6 +240,7 @@ def qr_checkin(request):
         status=Visit.Status.PENDING_APPROVAL,
         entry_type=Visit.EntryType.QR_SELF,
         is_returning=is_returning,
+        tenant_id=tenant_id,
     )
 
     notify_receptionist(visit)
@@ -890,7 +915,10 @@ def dashboard_stats(request):
 @permission_classes([AllowAny])  # Public — needed for self-service QR check-in page (Issue #4)
 def host_list(request):
     if request.method == 'GET':
-        hosts = Host.objects.filter(is_active=True)
+        tenant_id, kiosk_error = resolve_kiosk_tenant(request.query_params.get('kiosk_key'))
+        if kiosk_error:
+            return kiosk_error
+        hosts = (Host.objects.for_tenant(tenant_id) if tenant_id else Host.objects.all()).filter(is_active=True)
         q = request.query_params.get('q')
         if q:
             hosts = hosts.filter(Q(name__icontains=q) | Q(department__icontains=q))

@@ -31,6 +31,29 @@ class Visitor(models.Model):
         return f"{self.full_name} ({self.cnic or self.phone or self.email})"
 
 
+class KioskKey(models.Model):
+    """
+    Maps a public self-service kiosk (QR check-in page) to a tenant.
+
+    The QR check-in page has no user token, so there's no other way for it
+    to say which tenant's data a submission belongs to. The kiosk is
+    configured with this key (e.g. baked into its check-in page URL/config);
+    it sends the key on every public submission, and endpoints resolve it to
+    a tenant_id via `resolve_kiosk_tenant()` in views.py. A missing key
+    falls back to tenant_id=NULL (today's behavior — safe while only one
+    tenant exists); an unknown/inactive key is rejected with 400 rather than
+    silently falling back, since that almost certainly means a config error.
+    """
+    key = models.CharField(max_length=64, unique=True)
+    tenant_id = models.UUIDField()
+    label = models.CharField(max_length=200, blank=True, help_text="e.g. 'Main Gate — Idara Al-Khair'")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.label or self.key} -> tenant {self.tenant_id}"
+
+
 class Host(models.Model):
     """External hosts - people visitors come to meet."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

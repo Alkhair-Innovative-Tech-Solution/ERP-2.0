@@ -110,7 +110,7 @@ class ServiceAccess(SoftDeleteModel):
     Flow:
     1. Employee/SuperAdmin created → No service access by default
     2. Admin grants SIS access → Can login to SIS
-    3. Admin grants HDMS access → Must also assign HdmsRole
+    3. Admin grants HDMS access → Must also assign a catalog Role (see permissions.hdms_catalog)
     4. Admin grants VMS access → Must also assign a catalog Role (see permissions.vms_catalog)
 
     Example:

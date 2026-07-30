@@ -5,6 +5,8 @@ from django.db import models
 from django.utils import timezone
 from hdms_core.models import BaseModel
 
+from apps.tickets.models.managers import TenantSoftDeleteManager
+
 
 class ApprovalStatus(models.TextChoices):
     """Approval status choices."""
@@ -17,12 +19,15 @@ class Approval(BaseModel):
     """
     Approval model for financial ticket approvals.
     """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     ticket_id = models.UUIDField(db_index=True)
     approver_id = models.UUIDField(db_index=True)  # CEO or Finance head
     status = models.CharField(max_length=20, choices=ApprovalStatus.choices, default=ApprovalStatus.PENDING, db_index=True)
     reason = models.TextField(blank=True)
     documents = models.JSONField(default=dict, blank=True)
-    
+
+    objects = TenantSoftDeleteManager()
+
     class Meta:
         db_table = 'approvals'
         verbose_name = 'Approval'

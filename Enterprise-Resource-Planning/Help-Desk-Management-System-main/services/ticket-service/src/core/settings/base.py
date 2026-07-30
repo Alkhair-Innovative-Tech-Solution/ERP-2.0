@@ -258,7 +258,11 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER', default='no-reply.ait@iak.ngo')
 HDMS_FRONTEND_URL = config('HDMS_FRONTEND_URL', default='http://localhost:3000')
-AUTH_SERVICE_URL = config('AUTH_SERVICE_URL', default='http://auth_service:8000')
+# Note: hyphenated hostname, not the container_name's underscore form —
+# Django's HTTP_HOST validation (RFC 1034/1035) rejects underscores, so
+# `http://auth_service:8000` 400s with DisallowedHost on every request.
+# `auth-service` is the same container's other erp_network DNS alias.
+AUTH_SERVICE_URL = config('AUTH_SERVICE_URL', default='http://auth-service:8000')
 
 # Service URLs
 USER_SERVICE_URL = config('USER_SERVICE_URL', default='http://user-service:8001')

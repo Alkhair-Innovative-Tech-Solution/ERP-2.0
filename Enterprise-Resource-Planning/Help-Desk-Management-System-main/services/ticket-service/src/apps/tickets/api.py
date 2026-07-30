@@ -468,19 +468,32 @@ def update_sla(request, ticket_id: str, payload: SLAUpdateIn):
     return ticket
 
 @router.get("/{ticket_id}/history", response=List[AuditLogOut])
+@require_permission('hdms.ticket.view_own')
 def get_ticket_history(request, ticket_id: str):
-    """Get ticket audit log history."""
+    """Get ticket audit log history.
+
+    AuditLog itself has no tenant_id (audit app is shared infra, not a
+    ticket-owned model — out of scope per the prompt). Tenant isolation is
+    enforced by resolving the ticket through the tenant-scoped manager
+    first: a caller can only pull history for a ticket in their own
+    tenant. (This also closes a pre-existing gap — the old code returned
+    history for any object_id with no ticket-ownership check at all.)
+    """
+    ticket = Ticket.objects.for_tenant(request.user.tenant_id).filter(id=ticket_id).first()
+    if not ticket:
+        raise HttpError(404, "Ticket not found")
     return AuditLog.objects.filter(
-        model_name='Ticket', 
+        model_name='Ticket',
         object_id=ticket_id
     ).order_by('-timestamp')
 
 @router.post("/{ticket_id}/confirm-review", response=TicketOut)
+@require_permission('hdms.ticket.assign')
 def confirm_review_ticket(request, ticket_id: str, payload: TicketConfirmReviewIn):
     """Initial moderator review: update fields and assign."""
     from datetime import timedelta
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
         

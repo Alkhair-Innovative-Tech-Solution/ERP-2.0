@@ -10,6 +10,8 @@ from django.utils import timezone
 
 from hdms_core.models import BaseModel
 
+from .managers import TenantSoftDeleteManager
+
 
 class TicketStatus(models.TextChoices):
     """Ticket status choices."""
@@ -40,6 +42,8 @@ class Ticket(BaseModel):
     """
     Ticket model with FSM for status management.
     """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     title = models.CharField(max_length=500)
     description = models.TextField()
         # Human-readable ticket ID (HD-YYYY-NNNN)
@@ -91,7 +95,9 @@ class Ticket(BaseModel):
     
     # Progress
     progress_percent = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
-    
+
+    objects = TenantSoftDeleteManager()
+
     class Meta:
         db_table = 'tickets'
         verbose_name = 'Ticket'

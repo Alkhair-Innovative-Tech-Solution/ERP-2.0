@@ -20,11 +20,15 @@ from .ticket import TicketStatus, Priority
 
 from hdms_core.models import BaseModel
 
+from .managers import TenantSoftDeleteManager
+
 
 class SubTicket(BaseModel):
     """
     SubTicket model for departmental sub-tickets.
     """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     title = models.CharField(max_length=500)
     description = models.TextField()
     
@@ -43,7 +47,9 @@ class SubTicket(BaseModel):
     # Version and Reopen
     version = models.IntegerField(default=1)
     reopen_count = models.IntegerField(default=0)
-    
+
+    objects = TenantSoftDeleteManager()
+
     class Meta:
         db_table = 'sub_tickets'
         verbose_name = 'Sub Ticket'

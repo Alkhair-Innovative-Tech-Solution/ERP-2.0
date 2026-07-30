@@ -7,7 +7,6 @@ from ninja.errors import HttpError
 from typing import List, Optional
 from django.utils import timezone
 from django.db.models import Q
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.tickets.schemas import (
     TicketOut, TicketIn, TicketUpdateIn, StatusUpdateIn,
@@ -20,9 +19,9 @@ from apps.tickets.models.ticket import Ticket
 from apps.tickets.models.sub_ticket import SubTicket
 from apps.tickets.models.attachment import Attachment
 from apps.audit.models import AuditLog, ActionType, AuditCategory
-from hdms_core.clients.user_client import UserClient
 
-from hdms_core.authentication import RemoteJWTAuthentication
+from central_auth.authentication import CentralAuthAuthentication
+from central_auth.permissions import require_permission, require_service_subscribed
 from apps.notifications.email import (
     notify_ticket_submitted, notify_ticket_assigned,
     notify_ticket_acknowledged, notify_ticket_in_progress,
@@ -30,7 +29,19 @@ from apps.notifications.email import (
     notify_ticket_postponed, notify_ticket_closed,
 )
 
-router = Router(tags=["tickets"], auth=RemoteJWTAuthentication())
+router = Router(tags=["tickets"], auth=CentralAuthAuthentication())
+
+# FSM action -> hdms.* permission for the generic /status transition endpoint.
+# Only 'assign' and 'close' have a dedicated catalog permission; every other
+# transition (submit/review/start_progress/resolve/reject/postpone/reopen)
+# falls back to hdms.ticket.create as the closest "manage my ticket" bucket
+# — flagged in AUTH_INTEGRATION.md, the catalog has no per-transition
+# permission for these.
+STATUS_ACTION_PERMISSIONS = {
+    'assign': 'hdms.ticket.assign',
+    'close': 'hdms.ticket.close',
+}
+DEFAULT_STATUS_PERMISSION = 'hdms.ticket.create'
 
 
 def _notify_on_status(ticket, action: str, reason: str = ''):
@@ -50,13 +61,15 @@ def _notify_on_status(ticket, action: str, reason: str = ''):
 
 
 @router.post("/", response=TicketOut)
+@require_permission('hdms.ticket.create')
 def create_ticket(request, payload: TicketIn):
-    """Create a new ticket."""
-    # TODO: Re-enable user validation when auth-service is integrated
-    # user_client = UserClient()
-    # if not user_client.validate_user_exists(payload.requestor_id):
-    #     raise HttpError(404, "Requestor not found")
-    
+    """Create a new ticket.
+
+    Identity/permission now comes from the verified token (central_auth),
+    not a per-request HTTP call to auth-service — the old commented-out
+    UserClient.validate_user_exists() TODO is retired, not just disabled;
+    see AUTH_INTEGRATION.md "What was removed".
+    """
     ticket = Ticket.objects.create(
         title=payload.title,
         description=payload.description,
@@ -65,6 +78,7 @@ def create_ticket(request, payload: TicketIn):
         priority=payload.priority,
         category=payload.category,
         status=payload.status or 'draft',
+        tenant_id=request.user.tenant_id,
     )
     if ticket.status == 'submitted':
         notify_ticket_submitted(ticket)
@@ -72,6 +86,7 @@ def create_ticket(request, payload: TicketIn):
 
 
 @router.get("/", response=PaginatedTicketOut)
+@require_permission('hdms.ticket.view_own')
 def list_tickets(
     request,
     status: Optional[str] = None,
@@ -83,8 +98,15 @@ def list_tickets(
     page: int = 1,
     page_size: int = 20,
 ):
-    """List tickets with optional filters and pagination."""
-    queryset = Ticket.objects.all().order_by('-created_at')
+    """List tickets with optional filters and pagination.
+
+    Tenant-filtered. Callers with only hdms.ticket.view_own (e.g. Assignee)
+    see only tickets where they are the requestor or assignee; callers with
+    hdms.ticket.view_all (Admin/Moderator) see every ticket in their tenant.
+    """
+    queryset = Ticket.objects.for_tenant(request.user.tenant_id).order_by('-created_at')
+    if not request.user.has_perm('hdms.ticket.view_all'):
+        queryset = queryset.filter(Q(requestor_id=request.user.id) | Q(assignee_id=request.user.id))
 
     if exclude_drafts and not requestor_id and not assignee_id:
         queryset = queryset.exclude(status='draft')
@@ -110,29 +132,48 @@ def list_tickets(
 
 
 @router.get("/{ticket_id}", response=TicketOut)
+@require_permission('hdms.ticket.view_own')
 def get_ticket(request, ticket_id: str):
     """Get ticket by ID."""
-    ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+    ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     return TicketOut.from_orm(ticket)
 
 
 @router.patch("/{ticket_id}", response=TicketOut)
+@require_permission('hdms.ticket.create')
 def update_ticket(request, ticket_id: str, payload: TicketUpdateIn):
-    """Update ticket."""
-    ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
-    
+    """Update ticket.
+
+    No dedicated "edit ticket" permission exists in the HDMS catalog
+    (hdms.ticket.create/view_own/view_all/assign/close/user.manage) — gated
+    under hdms.ticket.create as the closest "manage my ticket" bucket.
+    Flagged in AUTH_INTEGRATION.md.
+    """
+    ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
+
     for field, value in payload.dict(exclude_unset=True).items():
         setattr(ticket, field, value)
-    
+
     ticket.save()
     return TicketOut.from_orm(ticket)
 
 
 @router.post("/{ticket_id}/status", response=TicketOut)
+@require_service_subscribed
 def update_status(request, ticket_id: str, payload: StatusUpdateIn):
-    """Update ticket status using FSM."""
-    ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
-    
+    """Update ticket status using FSM.
+
+    Multi-action endpoint (payload.action selects the FSM transition) — the
+    blanket ServiceSubscribed gate applies to all actions, then the specific
+    hdms.* permission is checked per-action below (only 'assign' and 'close'
+    have a dedicated catalog permission; see STATUS_ACTION_PERMISSIONS).
+    """
+    required_perm = STATUS_ACTION_PERMISSIONS.get(payload.action, DEFAULT_STATUS_PERMISSION)
+    if not request.user.has_perm(required_perm):
+        raise HttpError(403, f'Missing required permission: {required_perm}.')
+
+    ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
+
     # Get transition method
     transition_method = getattr(ticket, payload.action, None)
     if not transition_method:
@@ -176,16 +217,18 @@ def update_status(request, ticket_id: str, payload: StatusUpdateIn):
 
 
 @router.get("/{ticket_id}/sub-tickets", response=List[TicketOut])
+@require_permission('hdms.ticket.view_own')
 def list_sub_tickets(request, ticket_id: str):
     """List sub-tickets for a ticket."""
-    sub_tickets = SubTicket.objects.filter(parent_ticket_id=ticket_id, is_deleted=False)
+    sub_tickets = SubTicket.objects.for_tenant(request.user.tenant_id).filter(parent_ticket_id=ticket_id)
     return [TicketOut.from_orm(st) for st in sub_tickets]
 
 @router.post("/{ticket_id}/attachments", response=AttachmentOut)
+@require_permission('hdms.ticket.create')
 def add_attachment(request, ticket_id: str, payload: AttachmentCreateIn):
     """Add an attachment reference to a ticket."""
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
 
@@ -194,15 +237,17 @@ def add_attachment(request, ticket_id: str, payload: AttachmentCreateIn):
         file_id=payload.file_id,
         filename=payload.filename,
         file_size=payload.file_size,
-        content_type=payload.content_type
+        content_type=payload.content_type,
+        tenant_id=request.user.tenant_id,
     )
     return attachment
 
 @router.post("/{ticket_id}/assign", response=TicketOut)
+@require_permission('hdms.ticket.assign')
 def assign_ticket(request, ticket_id: str, payload: AssignTicketIn):
     """Assign ticket to an assignee."""
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
     
@@ -246,10 +291,15 @@ def assign_ticket(request, ticket_id: str, payload: AssignTicketIn):
 
     
 @router.post("/{ticket_id}/reject", response=TicketOut)
+@require_permission('hdms.ticket.create')
 def reject_ticket(request, ticket_id: str, payload: RejectTicketIn):
-    """Reject a ticket with reason."""
+    """Reject a ticket with reason.
+
+    No dedicated catalog permission — bucketed under hdms.ticket.create,
+    same reasoning as update_ticket. Flagged in AUTH_INTEGRATION.md.
+    """
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
     
@@ -274,10 +324,15 @@ def reject_ticket(request, ticket_id: str, payload: RejectTicketIn):
 
 
 @router.post("/{ticket_id}/postpone", response=TicketOut)
+@require_permission('hdms.ticket.create')
 def postpone_ticket(request, ticket_id: str, payload: PostponeTicketIn):
-    """Postpone a ticket with reason."""
+    """Postpone a ticket with reason.
+
+    No dedicated catalog permission — bucketed under hdms.ticket.create.
+    Flagged in AUTH_INTEGRATION.md.
+    """
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
     
@@ -300,10 +355,17 @@ def postpone_ticket(request, ticket_id: str, payload: PostponeTicketIn):
     return ticket
 
 @router.patch("/{ticket_id}/acknowledge", response=TicketOut)
+@require_permission('hdms.ticket.close')
 def acknowledge_ticket(request, ticket_id: str, payload: TicketAcknowledgeIn):
-    """Acknowledge ticket assignment."""
+    """Acknowledge ticket assignment.
+
+    Assignee-tier action (acknowledging one's own assignment) — no
+    dedicated catalog permission, bucketed under hdms.ticket.close since
+    that's the assignee-tier permission that exists. Flagged in
+    AUTH_INTEGRATION.md.
+    """
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
         
@@ -345,10 +407,15 @@ def acknowledge_ticket(request, ticket_id: str, payload: TicketAcknowledgeIn):
     return ticket
 
 @router.patch("/{ticket_id}/progress", response=TicketOut)
+@require_permission('hdms.ticket.close')
 def update_progress(request, ticket_id: str, payload: TicketProgressIn):
-    """Update ticket progress."""
+    """Update ticket progress.
+
+    Assignee-tier action, same reasoning as acknowledge_ticket — bucketed
+    under hdms.ticket.close. Flagged in AUTH_INTEGRATION.md.
+    """
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
         
@@ -370,13 +437,19 @@ def update_progress(request, ticket_id: str, payload: TicketProgressIn):
     return ticket
 
 @router.patch("/{ticket_id}/sla", response=TicketOut)
+@require_permission('hdms.ticket.assign')
 def update_sla(request, ticket_id: str, payload: SLAUpdateIn):
-    """Update ticket SLA (Due Date)."""
+    """Update ticket SLA (Due Date).
+
+    Moderator/Admin-tier action (ticket routing/scheduling) — no dedicated
+    catalog permission, bucketed under hdms.ticket.assign since that's the
+    moderator-tier permission that exists. Flagged in AUTH_INTEGRATION.md.
+    """
     try:
-        ticket = Ticket.objects.get(id=ticket_id, is_deleted=False)
+        ticket = Ticket.objects.for_tenant(request.user.tenant_id).get(id=ticket_id)
     except Ticket.DoesNotExist:
         raise HttpError(404, "Ticket not found")
-        
+
     old_due_at = ticket.due_at
     ticket.due_at = payload.due_at
     ticket.save()

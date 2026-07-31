@@ -129,10 +129,13 @@ def seed_default_permissions_for_org(sender, instance, created, **kwargs):
         }
         instance.save(update_fields=['enabled_features'])
 
-    # 2. DEFAULT_PERMISSIONS se sab roles ki permissions seed karo
-    from users.management.commands.seed_permissions import DEFAULT_PERMISSIONS
+    # 2. Catalog se sab roles ki permissions seed karo (Increment 3a: source
+    # of truth ab users.sms_catalog.SMS_ROLE_TEMPLATES hai, not the raw
+    # DEFAULT_PERMISSIONS dict — same values, proven byte-identical row-for-row,
+    # see docs/INCREMENT_3A_SMS_ROLES_RESULT.md).
+    from users.sms_catalog import SMS_ROLE_TEMPLATES
 
-    for role, permissions in DEFAULT_PERMISSIONS.items():
+    for role, permissions in SMS_ROLE_TEMPLATES.items():
         for codename, is_allowed in permissions.items():
             RolePermission.objects.get_or_create(
                 organization=instance,

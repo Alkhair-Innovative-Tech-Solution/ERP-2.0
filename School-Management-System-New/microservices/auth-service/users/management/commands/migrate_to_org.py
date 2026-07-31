@@ -130,11 +130,13 @@ class Command(BaseCommand):
 
             # 7. Seed Permissions for the Organization
             self.stdout.write('Seeding permissions for the organization...')
-            from users.management.commands.seed_permissions import DEFAULT_PERMISSIONS
-            
+            # Increment 3a: catalog is now the source of truth (same values,
+            # proven byte-identical — see docs/INCREMENT_3A_SMS_ROLES_RESULT.md).
+            from users.sms_catalog import SMS_ROLE_TEMPLATES as DEFAULT_PERMISSIONS
+
             perm_created = 0
             perm_skipped = 0
-            
+
             for role, permissions in DEFAULT_PERMISSIONS.items():
                 for codename, is_allowed in permissions.items():
                     obj, created = RolePermission.objects.get_or_create(

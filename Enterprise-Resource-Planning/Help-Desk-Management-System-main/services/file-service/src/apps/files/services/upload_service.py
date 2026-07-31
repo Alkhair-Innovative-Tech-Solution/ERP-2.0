@@ -19,7 +19,7 @@ class UploadService:
         'videos': ['.mp4', '.mov', '.mkv', '.avi']
     }
     
-    def upload_file(self, file: UploadedFile, ticket_id: str = None, chat_message_id: str = None, uploaded_by_id: str = None, category: str = 'general') -> dict:
+    def upload_file(self, file: UploadedFile, ticket_id: str = None, chat_message_id: str = None, uploaded_by_id: str = None, category: str = 'general', tenant_id: str = None) -> dict:
         """
         Upload file to temporary storage and trigger scan.
         
@@ -67,7 +67,8 @@ class UploadService:
             scan_status=ScanStatus.PENDING,
             ticket_id=ticket_id,
             chat_message_id=chat_message_id,
-            uploaded_by_id=uploaded_by_id
+            uploaded_by_id=uploaded_by_id,
+            tenant_id=tenant_id
         )
         
         # Trigger background scan

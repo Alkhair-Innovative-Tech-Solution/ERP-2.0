@@ -5,6 +5,8 @@ from django.db import models
 from django.utils import timezone
 from hdms_core.models import BaseModel
 
+from .managers import TenantSoftDeleteManager
+
 
 class ScanStatus(models.TextChoices):
     """File scan status."""
@@ -44,7 +46,10 @@ class Attachment(BaseModel):
     ticket_id = models.UUIDField(null=True, blank=True, db_index=True)
     chat_message_id = models.UUIDField(null=True, blank=True, db_index=True)
     uploaded_by_id = models.UUIDField(db_index=True)
-    
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    objects = TenantSoftDeleteManager()
+
     class Meta:
         db_table = 'attachments'
         verbose_name = 'Attachment'

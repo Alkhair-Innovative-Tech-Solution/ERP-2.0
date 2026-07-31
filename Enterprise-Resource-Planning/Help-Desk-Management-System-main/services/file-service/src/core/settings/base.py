@@ -226,6 +226,12 @@ REST_FRAMEWORK = {
 }
 
 # Service URLs
+# Hyphenated hostname — the erp_network alias also supports the underscored
+# form, but Django's own HTTP_HOST validation on the auth-service side
+# rejects it (RFC 1034/1035 forbids underscores in hostnames), same fix
+# ticket-service (2b) and communication-service (2c) needed.
+AUTH_SERVICE_URL = config('AUTH_SERVICE_URL', default='http://auth-service:8000')
+AUTH_SERVICE_TIMEOUT = config('AUTH_SERVICE_TIMEOUT', default=5, cast=int)
 USER_SERVICE_URL = config('USER_SERVICE_URL', default='http://user-service:8001')
 TICKET_SERVICE_URL = config('TICKET_SERVICE_URL', default='http://ticket-service:8002')
 COMMUNICATION_SERVICE_URL = config('COMMUNICATION_SERVICE_URL', default='http://communication-service:8003')

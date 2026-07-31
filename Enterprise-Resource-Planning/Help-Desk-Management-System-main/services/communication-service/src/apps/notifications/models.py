@@ -5,6 +5,8 @@ from django.db import models
 from django.utils import timezone
 from hdms_core.models import BaseModel
 
+from apps.chat.managers import TenantSoftDeleteManager
+
 
 class NotificationType(models.TextChoices):
     """Notification type choices."""
@@ -29,13 +31,16 @@ class Notification(BaseModel):
     """
     user_id = models.UUIDField(db_index=True)  # Recipient
     ticket_id = models.UUIDField(null=True, blank=True, db_index=True)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     type = models.CharField(max_length=50, choices=NotificationType.choices, db_index=True)
     title = models.CharField(max_length=200)
     message = models.TextField()
     is_read = models.BooleanField(default=False, db_index=True)
     read_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
-    
+
+    objects = TenantSoftDeleteManager()
+
     class Meta:
         db_table = 'notifications'
         verbose_name = 'Notification'

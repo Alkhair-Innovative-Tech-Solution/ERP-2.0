@@ -5,6 +5,9 @@ from django.db import models
 from django.utils import timezone
 from hdms_core.models import BaseModel
 
+from central_auth.tenant import TenantManager
+from .managers import TenantSoftDeleteManager
+
 
 class ChatMessage(BaseModel):
     """
@@ -14,7 +17,10 @@ class ChatMessage(BaseModel):
     sender_id = models.UUIDField(db_index=True)
     message = models.TextField()
     mentions = models.JSONField(default=list, blank=True)  # List of user IDs mentioned
-    
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    objects = TenantSoftDeleteManager()
+
     class Meta:
         db_table = 'chat_messages'
         verbose_name = 'Chat Message'
@@ -38,8 +44,11 @@ class TicketParticipant(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ticket_id = models.UUIDField(db_index=True)
     user_id = models.UUIDField(db_index=True)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
     joined_at = models.DateTimeField(auto_now_add=True)
-    
+
+    objects = TenantManager()
+
     class Meta:
         db_table = 'ticket_participants'
         verbose_name = 'Ticket Participant'

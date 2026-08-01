@@ -2,10 +2,11 @@
 Authentication models for JWT-based authentication.
 
 This module contains:
-- UserCredentials: Password storage for employees and superadmins
+- UserCredentials: Password storage for employees, superadmins, and non-staff identities
 - RefreshToken: JWT refresh token management
 - BlacklistedToken: Logout token blacklist
 - SuperAdmin: System superadmin accounts (imported from superadmin_models)
+- NonStaffIdentity: Non-employee identities, e.g. SMS students (imported from nonstaff_models)
 """
 import uuid
 from django.db import models
@@ -17,6 +18,9 @@ from employees.utils import SoftDeleteModel
 
 # Import SuperAdmin from separate module
 from .superadmin_models import SuperAdmin
+
+# Import NonStaffIdentity from separate module
+from .nonstaff_models import NonStaffIdentity
 
 
 class UserCredentials(SoftDeleteModel):
@@ -49,7 +53,16 @@ class UserCredentials(SoftDeleteModel):
         blank=True,
         help_text="SuperAdmin these credentials belong to (if superadmin)"
     )
-    
+
+    non_staff_identity = models.OneToOneField(
+        NonStaffIdentity,
+        on_delete=models.CASCADE,
+        related_name='credentials',
+        null=True,
+        blank=True,
+        help_text="Non-staff identity these credentials belong to (if non-staff, e.g. SMS student)"
+    )
+
     password_hash = models.CharField(
         max_length=255,
         help_text="Hashed password"
@@ -93,15 +106,19 @@ class UserCredentials(SoftDeleteModel):
             return f"Credentials for {self.employee.full_name} ({self.employee.employee_code})"
         elif self.superadmin:
             return f"Credentials for {self.superadmin.full_name} ({self.superadmin.superadmin_code})"
+        elif self.non_staff_identity:
+            return f"Credentials for {self.non_staff_identity.full_name} ({self.non_staff_identity.identity_code})"
         return f"Credentials #{self.id}"
-    
+
     def clean(self):
-        """Ensure exactly one of employee or superadmin is set"""
+        """Ensure exactly one of employee, superadmin, or non_staff_identity is set"""
         from django.core.exceptions import ValidationError
-        if not self.employee and not self.superadmin:
-            raise ValidationError("Must link to either an Employee or SuperAdmin")
-        if self.employee and self.superadmin:
-            raise ValidationError("Cannot link to both Employee and SuperAdmin")
+        linked = [self.employee, self.superadmin, self.non_staff_identity]
+        linked_count = sum(1 for x in linked if x)
+        if linked_count == 0:
+            raise ValidationError("Must link to either an Employee, SuperAdmin, or NonStaffIdentity")
+        if linked_count > 1:
+            raise ValidationError("Cannot link to more than one of Employee, SuperAdmin, NonStaffIdentity")
     
     def set_password(self, raw_password):
         """Hash and set password"""

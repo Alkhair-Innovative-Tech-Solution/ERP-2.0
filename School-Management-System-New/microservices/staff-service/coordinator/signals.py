@@ -99,6 +99,11 @@ def create_coordinator_user(sender, instance, created, **kwargs):
                 print(f"User already exists for coordinator {instance.full_name}")
                 try:
                     existing_user = User.objects.filter(email=instance.email).first()
+                    if existing_user and not instance.user_id:
+                        # Link the FK directly via update() to avoid re-triggering
+                        # post_save on Coordinator (we're already inside one).
+                        Coordinator.objects.filter(pk=instance.pk).update(user=existing_user)
+                        instance.user = existing_user
                     campus_name = instance.campus.campus_name if instance.campus else ''
                     verb = "You have been added as a Coordinator"
                     target_text = f"at {campus_name}" if campus_name else ""
@@ -106,11 +111,13 @@ def create_coordinator_user(sender, instance, created, **kwargs):
                 except Exception:
                     pass
                 return
-            
+
             user, message = UserCreationService.create_user_from_entity(instance, 'coordinator')
             if not user:
                 print(f"Failed to create user for coordinator {instance.id}: {message}")
             else:
+                Coordinator.objects.filter(pk=instance.pk).update(user=user)
+                instance.user = user
                 print(f"[OK] Created user for coordinator: {instance.full_name} ({instance.employee_code})")
                 try:
                     campus_name = instance.campus.campus_name if instance.campus else ''
@@ -260,18 +267,22 @@ def on_assigned_levels_changed(sender, instance, action, reverse, model, pk_set,
             # post_save handler defers creation and relies on this m2m_changed handler to
             # finish user creation. We must not skip creation just because employee_code exists.
             from users.models import User
-            user_exists = False
+            matched_user = None
             if instance.email:
-                user_exists = User.objects.filter(email__iexact=instance.email).exists()
-            if not user_exists and instance.employee_code:
-                user_exists = User.objects.filter(username=instance.employee_code).exists()
+                matched_user = User.objects.filter(email__iexact=instance.email).first()
+            if not matched_user and instance.employee_code:
+                matched_user = User.objects.filter(username=instance.employee_code).first()
 
-            if not user_exists:
-                user, message = UserCreationService.create_user_from_entity(instance, 'coordinator')
-                if not user:
+            if not matched_user:
+                matched_user, message = UserCreationService.create_user_from_entity(instance, 'coordinator')
+                if not matched_user:
                     print(f"Failed to create user after levels set for coordinator {instance.id}: {message}")
                 else:
                     print(f"[OK] Created user after levels set for coordinator: {instance.full_name} ({instance.employee_code})")
+
+            if matched_user and not instance.user_id:
+                Coordinator.objects.filter(pk=instance.pk).update(user=matched_user)
+                instance.user = matched_user
         except Exception as e:
             print(f"Error creating user after levels set for coordinator {instance.id}: {str(e)}")
 

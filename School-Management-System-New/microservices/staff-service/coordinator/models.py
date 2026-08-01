@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.utils import timezone
 from campus.models import Campus
 from classes.models import Level
+from users.models import User
 import os
 
 # Choices
@@ -47,7 +48,10 @@ class CoordinatorManager(OrganizationManager):
 class Coordinator(models.Model):
     # Custom manager
     objects = CoordinatorManager()
-    
+
+    # User Account
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='coordinator_profile')
+
     # Organization
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='coordinators')
     
@@ -183,15 +187,23 @@ class Coordinator(models.Model):
                             # Store old code to update user later
                             old_code = self.employee_code
                             self.employee_code = new_code
-                            
-                            # Update User account if it exists (linked by employee_code/username)
-                            from users.models import User
-                            user = User.objects.filter(username=old_code).first()
-                            if user:
-                                user.username = new_code
+
+                            # Update linked User account. FK (self.user) is now
+                            # the source of truth. Fall back to the legacy
+                            # username lookup only for coordinators the FK
+                            # backfill couldn't match (pre-existing orphans) —
+                            # if found that way, also (re)link the FK so it
+                            # self-heals for next time.
+                            target_user = self.user
+                            if not target_user:
+                                target_user = User.objects.filter(username=old_code).first()
+                                if target_user:
+                                    self.user = target_user
+                            if target_user:
+                                target_user.username = new_code
                                 if campus_changed:
-                                    user.campus = self.campus
-                                user.save(update_fields=['username', 'campus'] if campus_changed else ['username'])
+                                    target_user.campus = self.campus
+                                target_user.save(update_fields=['username', 'campus'] if campus_changed else ['username'])
                 except Exception as e:
                     pass
 

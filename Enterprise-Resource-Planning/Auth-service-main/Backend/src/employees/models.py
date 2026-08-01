@@ -368,6 +368,15 @@ class Employee(SoftDeleteModel):
         help_text="Denormalized from organization.tenant — set automatically on save. One employee = one tenant."
     )
 
+    # SMS migration (Phase B): original SMS users_user.id for this identity,
+    # when this Employee was created by importing an SMS staff user. Null for
+    # every non-imported Employee (VMS/HDMS staff, etc.). Unique so re-running
+    # the importer updates the same row instead of creating a duplicate.
+    legacy_user_id = models.BigIntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="Original SMS users_user.id (Phase B import key), null if not imported from SMS"
+    )
+
     # Core Personal Data
     full_name = models.CharField(max_length=200)
     cnic = models.CharField(max_length=15, unique=True)

@@ -105,17 +105,17 @@ def run_test():
     # ==========================================
 
     print_step("STEP 3: Testing Default Permissions (Should Fail)")
-    
-    # Check SIS Access
-    check_url = f"{BASE_URL}/permissions/check/sis"
+
+    # Check HDMS Access
+    check_url = f"{BASE_URL}/permissions/check/hdms"
     resp = requests.get(check_url, headers=headers)
-    
+
     try:
         data = resp.json()
         if data['has_access'] == False:
-            print_success("Correctly denied SIS access (Default)")
+            print_success("Correctly denied HDMS access (Default)")
         else:
-            print_fail("Unexpectedly granted SIS access!")
+            print_fail("Unexpectedly granted HDMS access!")
     except:
         print_fail(f"API Error (Status {resp.status_code}): {resp.text}")
         return
@@ -123,14 +123,6 @@ def run_test():
     # ==========================================
 
     print_step("STEP 4: Granting Permissions via Backend")
-    
-    # Grant SIS Access
-    ServiceAccess.objects.get_or_create(
-        employee=emp,
-        service='sis',
-        defaults={'is_active': True}
-    )
-    print("Granted SIS Access to Test User")
 
     # Grant HDMS Access + Role
     sa_hdms, _ = ServiceAccess.objects.get_or_create(
@@ -146,15 +138,6 @@ def run_test():
     # ==========================================
 
     print_step("STEP 5: Re-Testing Permissions (Should Succeed)")
-
-    # Check SIS Access
-    resp = requests.get(f"{BASE_URL}/permissions/check/sis", headers=headers)
-    data = resp.json()
-    if data['has_access'] == True:
-        print_success("SIS Access Verified!")
-        print(f"Role Info: {data.get('role_info')}")
-    else:
-        print_fail("SIS Access still denied!")
 
     # Check HDMS Access
     resp = requests.get(f"{BASE_URL}/permissions/check/hdms", headers=headers)

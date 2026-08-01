@@ -15,7 +15,7 @@ def has_service_access(employee, service_name):
     
     Args:
         employee: Employee object
-        service_name: 'sis' | 'hdms' | 'finance' | 'hr' | 'procurement'
+        service_name: 'hdms' | 'vms' | 'finance' | 'hr' | 'procurement'
     
     Returns:
         Boolean: True if has active access
@@ -74,26 +74,6 @@ def get_hdms_role(employee):
     }
 
 
-def get_sis_role(employee):
-    """
-    Get employee's SIS role based on primary designation.
-    """
-    # Check if has SIS access
-    if not has_service_access(employee, 'sis'):
-        return None
-    
-    primary = employee.assignments.filter(is_primary=True, is_active=True).first()
-    if not primary:
-        return None
-    
-    return {
-        'role_type': 'designation_based',
-        'designation': primary.designation.position_name,
-        'designation_code': primary.designation.position_code,
-        'department': primary.department.dept_name
-    }
-
-
 def get_vms_role(employee):
     """Get employee's VMS role if they have VMS access.
     Catalog-driven: reads the employee's tenant-scoped EmployeeRole for the
@@ -114,7 +94,7 @@ def get_employee_permissions(employee, service_name):
     
     Args:
         employee: Employee object
-        service_name: 'sis' | 'hdms'
+        service_name: 'hdms' | 'vms'
     
     Returns:
         dict with access info and role details
@@ -142,11 +122,6 @@ def get_employee_permissions(employee, service_name):
             result['has_access'] = False
             result['error'] = 'HDMS access granted but no role assigned'
 
-    elif service_name == 'sis':
-        sis_role = get_sis_role(employee)
-        if sis_role:
-            result['sis_role'] = sis_role
-
     elif service_name == 'vms':
         vms_role = get_vms_role(employee)
         if vms_role:
@@ -165,7 +140,7 @@ def create_audit_log(employee, action, service, details, performed_by, ip_addres
     Args:
         employee: Employee whose permissions changed
         action: 'grant_access' | 'revoke_access' | 'assign_role' | etc.
-        service: 'sis' | 'hdms'
+        service: 'hdms' | 'vms'
         details: dict with additional info
         performed_by: Admin employee who performed action
         ip_address: Optional IP address

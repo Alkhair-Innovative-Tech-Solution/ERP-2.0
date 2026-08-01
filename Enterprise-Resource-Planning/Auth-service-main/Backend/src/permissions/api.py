@@ -5,7 +5,6 @@ Endpoints:
 - GET /api/permissions/services - Get employee's available services
 - GET /api/permissions/check/{service} - Check access to specific service
 - GET /api/permissions/hdms-role - Get HDMS role info
-- GET /api/permissions/sis-role - Get SIS role info
 """
 from pydantic import BaseModel
 import re
@@ -21,7 +20,6 @@ from permissions.utils import (
     get_service_accesses,
     has_service_access,
     get_hdms_role,
-    get_sis_role,
     get_employee_permissions
 )
 
@@ -51,13 +49,6 @@ class HdmsRoleResponse(Schema):
     can_view_all_tickets: bool = False
     can_assign_tickets: bool = False
     can_close_tickets: bool = False
-
-
-class SisRoleResponse(Schema):
-    has_access: bool
-    designation: Optional[str] = None
-    designation_code: Optional[str] = None
-    department: Optional[str] = None
 
 
 class ErrorResponse(Schema):
@@ -122,8 +113,6 @@ def check_service_access(request: HttpRequest, service: str):
     if perms.get('has_access'):
         if service == 'hdms' and 'hdms_role' in perms:
             role_info = perms['hdms_role']
-        elif service == 'sis' and 'sis_role' in perms:
-            role_info = perms['sis_role']
         elif service == 'vms' and 'vms_role' in perms:
             role_info = perms['vms_role']
     
@@ -155,29 +144,6 @@ def get_hdms_role_info(request: HttpRequest):
         **role
     }
 
-
-@router.get("/sis-role", response={200: SisRoleResponse, 401: ErrorResponse})
-@require_permission("service_access.view")
-def get_sis_role_info(request: HttpRequest):
-    """
-    Get SIS role information for authenticated employee.
-    
-    SIS role is based on designation - no separate role assignment!
-    """
-    employee = request.auth
-    role = get_sis_role(employee)
-    
-    if not role:
-        return 200, {
-            "has_access": False
-        }
-    
-    return 200, {
-        "has_access": True,
-        "designation": role['designation'],
-        "designation_code": role['designation_code'],
-        "department": role['department']
-    }
 
 @router.post("/grant-hdms-access", response={201: dict, 200: dict, 400: dict})
 @require_permission("service_access.grant")

@@ -48,6 +48,15 @@ class NonStaffIdentity(SoftDeleteModel):
         help_text="Login identifier, analogous to Employee.employee_code / SuperAdmin.superadmin_code"
     )
 
+    # SMS migration (Phase B2): original SMS users_user.id for this identity,
+    # when created by importing an SMS student. Null for any non-imported
+    # identity. Unique so re-running the importer updates the same row
+    # instead of creating a duplicate. Mirrors Employee.legacy_user_id (B1).
+    legacy_user_id = models.BigIntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="Original SMS users_user.id (Phase B import key), null if not imported from SMS"
+    )
+
     full_name = models.CharField(max_length=200)
     email = models.EmailField(blank=True, null=True)
 

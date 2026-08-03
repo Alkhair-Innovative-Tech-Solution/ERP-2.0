@@ -228,14 +228,14 @@ class TestEmployeeRoleAssignmentAPI:
 
     def test_assign_role_clears_cache(self, sa_client, employee):
         from django.core.cache import cache
-        cache.set(_CACHE_KEY.format(str(employee.id)), [], 300)
+        cache.set(_CACHE_KEY.format("employee", str(employee.id)), [], 300)
         role = Role.objects.create(name="HR Manager", service="auth")
         sa_client.post(
             "/api/permissions/rbac/employee-roles",
             data=f'{{"employee_id": "{employee.employee_id}", "role_id": "{role.id}"}}',
             content_type="application/json",
         )
-        assert cache.get(_CACHE_KEY.format(str(employee.id))) is None
+        assert cache.get(_CACHE_KEY.format("employee", str(employee.id))) is None
 
     def test_remove_role_assignment_returns_200(self, sa_client, employee):
         role = Role.objects.create(name="HR Manager", service="auth")
@@ -267,14 +267,14 @@ class TestPermissionOverrideAPI:
 
     def test_create_override_clears_cache(self, sa_client, employee):
         from django.core.cache import cache
-        cache.set(_CACHE_KEY.format(str(employee.id)), [], 300)
+        cache.set(_CACHE_KEY.format("employee", str(employee.id)), [], 300)
         Permission.objects.create(codename="branch.create", name="Create Branch", service="auth")
         sa_client.post(
             "/api/permissions/rbac/overrides",
             data=f'{{"employee_id": "{employee.id}", "permission_codename": "branch.create", "is_allowed": true}}',
             content_type="application/json",
         )
-        assert cache.get(_CACHE_KEY.format(str(employee.id))) is None
+        assert cache.get(_CACHE_KEY.format("employee", str(employee.id))) is None
 
     def test_remove_override_returns_200(self, sa_client, employee):
         perm = Permission.objects.create(codename="branch.delete", name="Delete Branch", service="auth")

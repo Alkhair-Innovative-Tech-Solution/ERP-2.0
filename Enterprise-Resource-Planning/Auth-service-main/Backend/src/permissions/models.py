@@ -14,6 +14,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from employees.models import Employee, Tenant
 from employees.utils import SoftDeleteModel
+from authentication.nonstaff_models import NonStaffIdentity
 
 
 class Service(models.Model):
@@ -138,6 +139,15 @@ class ServiceAccess(SoftDeleteModel):
         help_text="SuperAdmin who has access (if superadmin)"
     )
 
+    non_staff = models.ForeignKey(
+        NonStaffIdentity,
+        on_delete=models.CASCADE,
+        related_name='service_accesses',
+        null=True,
+        blank=True,
+        help_text="Non-staff identity who has access (if non-staff, e.g. SMS student)"
+    )
+
     service = models.CharField(
         max_length=20,
         help_text="Service code — must match an active Service.code (e.g. 'hdms', 'vms')"
@@ -195,10 +205,12 @@ class ServiceAccess(SoftDeleteModel):
         ]
     
     def clean(self):
-        if not self.employee and not self.superadmin:
-            raise ValidationError("Must link to either an Employee or SuperAdmin")
-        if self.employee and self.superadmin:
-            raise ValidationError("Cannot link to both Employee and SuperAdmin")
+        linked = [self.employee, self.superadmin, self.non_staff]
+        linked_count = sum(1 for x in linked if x)
+        if linked_count == 0:
+            raise ValidationError("Must link to either an Employee, SuperAdmin, or NonStaffIdentity")
+        if linked_count > 1:
+            raise ValidationError("Cannot link to more than one of Employee, SuperAdmin, NonStaffIdentity")
         if self.service and not Service.objects.filter(code=self.service, is_active=True).exists():
             raise ValidationError(f"Service '{self.service}' does not exist or is inactive.")
         # Tenant gate: employee's tenant must have an active Subscription for this service.
@@ -211,7 +223,8 @@ class ServiceAccess(SoftDeleteModel):
 
     def __str__(self):
         status = "Active" if self.is_active else "Inactive"
-        name = self.employee.full_name if self.employee else (self.superadmin.full_name if self.superadmin else "?")
+        principal = self.employee or self.superadmin or self.non_staff
+        name = principal.full_name if principal else "?"
         return f"{name} → {self.service} ({status})"
     
     def revoke(self, revoked_by_employee):
@@ -386,12 +399,24 @@ class Role(SoftDeleteModel):
 
 
 class EmployeeRole(SoftDeleteModel):
-    """Assignment of a role to an employee. scope null = global."""
+    """Assignment of a role to a principal (Employee OR NonStaffIdentity —
+    exactly one, mirroring UserCredentials' employee/superadmin/non_staff
+    pattern). scope null = global."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
         related_name="employee_roles",
+        null=True,
+        blank=True,
+    )
+    non_staff = models.ForeignKey(
+        NonStaffIdentity,
+        on_delete=models.CASCADE,
+        related_name="employee_roles",
+        null=True,
+        blank=True,
+        help_text="Non-staff identity this role is assigned to (if non-staff, e.g. SMS student)",
     )
     role = models.ForeignKey(
         Role,
@@ -420,8 +445,15 @@ class EmployeeRole(SoftDeleteModel):
         db_table = "permissions_rbac_employee_role"
 
     def clean(self):
+        linked = [self.employee, self.non_staff]
+        linked_count = sum(1 for x in linked if x)
+        if linked_count == 0:
+            raise ValidationError("Must link to either an Employee or NonStaffIdentity")
+        if linked_count > 1:
+            raise ValidationError("Cannot link to both Employee and NonStaffIdentity")
         qs = EmployeeRole.objects.filter(
             employee=self.employee,
+            non_staff=self.non_staff,
             role=self.role,
             scope_content_type=self.scope_content_type,
             scope_object_id=self.scope_object_id,
@@ -429,20 +461,33 @@ class EmployeeRole(SoftDeleteModel):
         if self.pk:
             qs = qs.exclude(pk=self.pk)
         if qs.exists():
-            raise ValidationError("Employee already has this role at this scope.")
+            raise ValidationError("This principal already has this role at this scope.")
 
     def __str__(self):
         scope = f" @ {self.scope_object_id}" if self.scope_object_id else " (global)"
-        return f"{self.employee} → {self.role}{scope}"
+        principal = self.employee or self.non_staff
+        return f"{principal} → {self.role}{scope}"
 
 
 class EmployeePermissionOverride(SoftDeleteModel):
-    """Per-employee permission grant or block that overrides role defaults."""
+    """Per-principal permission grant or block that overrides role defaults.
+    Principal is Employee OR NonStaffIdentity — exactly one, same pattern as
+    EmployeeRole/UserCredentials."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee = models.ForeignKey(
         Employee,
         on_delete=models.CASCADE,
         related_name="permission_overrides",
+        null=True,
+        blank=True,
+    )
+    non_staff = models.ForeignKey(
+        NonStaffIdentity,
+        on_delete=models.CASCADE,
+        related_name="permission_overrides",
+        null=True,
+        blank=True,
+        help_text="Non-staff identity this override applies to (if non-staff, e.g. SMS student)",
     )
     permission = models.ForeignKey(
         Permission,
@@ -474,8 +519,15 @@ class EmployeePermissionOverride(SoftDeleteModel):
         db_table = "permissions_rbac_employee_permission_override"
 
     def clean(self):
+        linked = [self.employee, self.non_staff]
+        linked_count = sum(1 for x in linked if x)
+        if linked_count == 0:
+            raise ValidationError("Must link to either an Employee or NonStaffIdentity")
+        if linked_count > 1:
+            raise ValidationError("Cannot link to both Employee and NonStaffIdentity")
         qs = EmployeePermissionOverride.objects.filter(
             employee=self.employee,
+            non_staff=self.non_staff,
             permission=self.permission,
             scope_content_type=self.scope_content_type,
             scope_object_id=self.scope_object_id,
@@ -483,8 +535,9 @@ class EmployeePermissionOverride(SoftDeleteModel):
         if self.pk:
             qs = qs.exclude(pk=self.pk)
         if qs.exists():
-            raise ValidationError("Employee already has an override for this permission at this scope.")
+            raise ValidationError("This principal already has an override for this permission at this scope.")
 
     def __str__(self):
         action = "ALLOW" if self.is_allowed else "DENY"
-        return f"{action}: {self.employee} → {self.permission}"
+        principal = self.employee or self.non_staff
+        return f"{action}: {principal} → {self.permission}"

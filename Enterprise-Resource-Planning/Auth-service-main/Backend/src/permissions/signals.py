@@ -16,4 +16,7 @@ def clear_cache_on_role_permission_change(sender, instance, action, **kwargs):
     from permissions.rbac import clear_permission_cache
 
     for er in EmployeeRole.objects.filter(role=instance, is_deleted=False):
-        clear_permission_cache(str(er.employee_id))
+        if er.employee_id:
+            clear_permission_cache(str(er.employee_id), "employee")
+        elif er.non_staff_id:
+            clear_permission_cache(str(er.non_staff_id), "non_staff")

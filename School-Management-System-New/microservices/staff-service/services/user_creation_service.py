@@ -121,6 +121,14 @@ class UserCreationService:
             # Sync to auth-service OUTSIDE transaction so HTTP timeout never rolls back DB write
             UserCreationService._sync_user_to_auth(user, entity)
 
+            # Phase B4 dual-write: also land this identity in central auth's
+            # SMS01 tenant, no-ops unless SYNC_TO_CENTRAL_AUTH=true. Covers
+            # every caller of create_user_from_entity — all three staff
+            # signals, populate_teachers_from_csv, and
+            # create_users_for_existing_entities — through this one spot.
+            from services.central_auth_sync_service import sync_staff_entity_to_central_auth
+            sync_staff_entity_to_central_auth(user, entity, entity_type)
+
             # Send credentials email — failure never blocks user creation
             try:
                 from services.email_notification_service import EmailNotificationService

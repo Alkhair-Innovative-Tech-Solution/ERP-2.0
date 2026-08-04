@@ -433,6 +433,12 @@ services:
       REDIS_URL: redis://redis:6379/4
       CAMPUS_SERVICE_URL: http://campus-service:8003
       TIMETABLE_SERVICE_URL: http://timetable-service:8009
+      # Phase B4: dual-write new staff to central auth's SMS01 tenant.
+      # Off by default — set SYNC_TO_CENTRAL_AUTH=true in the environment
+      # to enable per-deployment.
+      SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
+      CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
+      SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
     depends_on:
       postgres-staff:
         condition: service_healthy

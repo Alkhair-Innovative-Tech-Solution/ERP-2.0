@@ -253,5 +253,10 @@ def _ensure_teacher_user_account(teacher):
         u.save()
         teacher.user = u
         teacher.save(update_fields=['user'])
+
+        # Phase B4 dual-write: this path never synced to auth-8001 or
+        # central auth before — no-ops unless SYNC_TO_CENTRAL_AUTH=true.
+        from services.central_auth_sync_service import sync_staff_entity_to_central_auth
+        sync_staff_entity_to_central_auth(u, teacher, 'teacher')
     except Exception as e:
         print(f"[USER CREATE ERROR] {e}")

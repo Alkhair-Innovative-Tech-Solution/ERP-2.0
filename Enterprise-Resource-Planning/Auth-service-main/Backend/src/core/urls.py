@@ -11,6 +11,7 @@ from permissions.api import router as permissions_router
 from employees.api import router as employees_router
 from audit.api import router as audit_router
 from permissions.rbac_api import router as rbac_router
+from employees.internal_api import router as internal_router
 from authentication.jwks_view import jwks_view
 
 # Initialize Ninja API
@@ -26,6 +27,7 @@ api.add_router("/permissions", permissions_router)
 api.add_router("/employees", employees_router)  # Employees at /api/employees
 api.add_router("/audit", audit_router)          # Audit logs at /api/audit
 api.add_router("/permissions/rbac", rbac_router)  # RBAC management at /api/permissions/rbac
+api.add_router("/internal", internal_router)      # Service-to-service, secret-gated, at /api/internal
 
 urlpatterns = [
     path('auth-admin/', admin.site.urls),

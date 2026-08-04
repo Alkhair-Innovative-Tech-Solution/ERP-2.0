@@ -6,6 +6,8 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.hashers import make_password
 from django.db import connection
 
+from services.central_auth_sync_service import sync_staff_to_central_auth
+
 
 AUTH_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001")
 SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
@@ -146,17 +148,23 @@ class Command(BaseCommand):
                 self.stdout.write(f"[DRY-RUN] Would sync {label} (code={employee_code})")
                 continue
 
+            # Fetch profile fields (campus/phone always; cnic/dob/gender/
+            # joining_date needed too, for the Phase B4 central-auth
+            # dual-write — central auth's Employee contract requires them,
+            # SMS's own auth-8001 sync doesn't).
+            table = {"principal": "principals_principal", "teacher": "teachers_teacher", "coordinator": "coordinator_coordinator"}[role]
+            campus_col = "current_campus_id" if role == "teacher" else "campus_id"
+            with connection.cursor() as c:
+                c.execute(
+                    f"SELECT {campus_col}, contact_number, cnic, dob, gender, joining_date FROM {table} WHERE id = %s",
+                    [sid],
+                )
+                profile_row = c.fetchone()
+            campus_id, phone, cnic, dob, gender, joining_date = profile_row if profile_row else (None, "", None, None, None, None)
+
             # Ensure local user exists
             if not _local_user_exists(email, employee_code):
                 self.stdout.write(f"[LOCAL] Creating local user for {label}")
-                # Get campus_id and phone from raw SQL
-                table = {"principal": "principals_principal", "teacher": "teachers_teacher", "coordinator": "coordinator_coordinator"}[role]
-                campus_col = "current_campus_id" if role == "teacher" else "campus_id"
-                with connection.cursor() as c:
-                    c.execute(f"SELECT {campus_col}, contact_number FROM {table} WHERE id = %s", [sid])
-                    row = c.fetchone()
-                campus_id = row[0] if row else None
-                phone = row[1] if row else ""
                 _create_local_user(email, employee_code, full_name, role, org_id, campus_id, phone)
 
             # Build org_data for auth-service
@@ -185,5 +193,33 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.ERROR(f"[FAIL]  {label} → {msg}"))
                 failed += 1
+
+            # Phase B4 dual-write: also land this identity in central
+            # auth's SMS01 tenant — no-ops unless SYNC_TO_CENTRAL_AUTH=true.
+            # Carry the REAL local password hash (not DEFAULT_PASSWORD
+            # blindly) — the local user may already have a changed password
+            # from a prior sync/login.
+            with connection.cursor() as c:
+                c.execute("SELECT id, password FROM users_user WHERE email = %s OR username = %s LIMIT 1", [email, employee_code])
+                local_user_row = c.fetchone()
+            local_user_id, password_hash = local_user_row if local_user_row else (None, make_password(DEFAULT_PASSWORD))
+
+            ca_ok, ca_msg = sync_staff_to_central_auth(
+                legacy_user_id=local_user_id or sid,
+                email=email,
+                username=employee_code,
+                role=role,
+                password_hash=password_hash,
+                full_name=full_name,
+                cnic=cnic,
+                dob=dob,
+                gender=gender,
+                phone=phone,
+                joining_date=joining_date,
+            )
+            if ca_ok:
+                self.stdout.write(self.style.SUCCESS(f"[CENTRAL-AUTH] {label} → {ca_msg}"))
+            elif "disabled" not in ca_msg:
+                self.stdout.write(self.style.WARNING(f"[CENTRAL-AUTH] {label} → {ca_msg}"))
 
         self.stdout.write(f"\nDone: {ok} synced, {skipped} skipped, {failed} failed.")

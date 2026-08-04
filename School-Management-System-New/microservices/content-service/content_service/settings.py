@@ -67,7 +67,10 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["ams_shared.jwt.validator.ServiceJWTAuthentication"],
+    # Phase C1: dual-run — DualAuthentication routes each request to either
+    # the legacy SMS-shared (HS256) or central-auth (RS256/JWKS) verifier
+    # based on the token's own alg header. See content/dual_auth.py.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["content.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -98,6 +101,10 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 
 INTERNAL_SERVICE_SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
+
+# ── Phase C1: central auth JWKS verification ──────────────────────────────────
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://host.docker.internal:8000")
+AUTH_SERVICE_TIMEOUT = int(os.getenv("AUTH_SERVICE_TIMEOUT", "5"))
 SUBJECT_SERVICE_URL = os.getenv("SUBJECT_SERVICE_URL", "http://subject-service:8012")
 
 MIGRATION_MODULES = {

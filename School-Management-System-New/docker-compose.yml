@@ -791,6 +791,8 @@ services:
       DB_PASSWORD: ${CONTENT_DB_PASS:-content_pass}
       REDIS_URL: redis://redis:6379/13
       SUBJECT_SERVICE_URL: http://subject-service:8012
+      # Phase C1: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-content:
         condition: service_healthy

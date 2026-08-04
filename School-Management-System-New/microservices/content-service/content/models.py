@@ -2,7 +2,33 @@ from django.db import models
 from users.managers import OrganizationManager
 
 
-class Module(models.Model):
+class CentralAuthFieldsMixin(models.Model):
+    """
+    Phase C1: additive, nullable fields for the central-auth repoint.
+    Dual-run — the existing `organization` FK and OrganizationManager-based
+    `objects` manager on each model are untouched; these are new, parallel
+    fields used only by the central-auth code path (see content/views.py,
+    content/dual_auth.py).
+
+    tenant_id:       stamped from the verified token's tenant_id claim on
+                      create, used to scope reads for central-auth requests
+                      (mirrors central_auth/tenant.py's TenantQuerySet
+                      shape, applied manually in views.py rather than via
+                      a replacement manager — see dual_auth.py's docstring
+                      for why the default manager can't be reused as-is).
+    central_org_id:   maps this row's local `users.Organization` to its
+                      central-auth Organization equivalent. Nullable,
+                      backfillable — synthetic-only for now (Phase B0
+                      found no real SMS org/user data anywhere yet).
+    """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        abstract = True
+
+
+class Module(CentralAuthFieldsMixin):
     """Chapter/Unit of a Subject — e.g. 'Chapter 1: Algebra'"""
     objects = OrganizationManager()
     all_objects = models.Manager()
@@ -29,7 +55,7 @@ class Module(models.Model):
         return f"{self.title}"
 
 
-class Lesson(models.Model):
+class Lesson(CentralAuthFieldsMixin):
     """Individual topic within a Module"""
     objects = OrganizationManager()
     all_objects = models.Manager()
@@ -54,8 +80,11 @@ class Lesson(models.Model):
         return f"{self.module.title} — {self.title}"
 
 
-class ContentItem(models.Model):
+class ContentItem(CentralAuthFieldsMixin):
     """Actual file or link inside a Lesson"""
+    objects = models.Manager()
+    all_objects = models.Manager()
+
     CONTENT_TYPE_CHOICES = [
         ('VIDEO', 'Video'),
         ('DOCUMENT', 'Document'),
@@ -85,7 +114,7 @@ class ContentItem(models.Model):
         return f"{self.lesson.title} — {self.title}"
 
 
-class StudentContentProgress(models.Model):
+class StudentContentProgress(CentralAuthFieldsMixin):
     """Tracks which student has completed which lesson"""
     objects = OrganizationManager()
     all_objects = models.Manager()
@@ -94,7 +123,17 @@ class StudentContentProgress(models.Model):
         'users.Organization', on_delete=models.CASCADE,
         null=True, blank=True, related_name='content_progress'
     )
-    student_id = models.IntegerField()
+    # SMS-local integer user id (legacy path only). Nullable — widened
+    # rather than kept required, since central-auth-authenticated rows
+    # can't populate it (their identity is a central-auth UUID, not an
+    # SMS-local int — see central_user_id below). Existing rows keep
+    # their value; nothing backfilled.
+    student_id = models.IntegerField(null=True, blank=True)
+    # Central-auth NonStaffIdentity id (student), for rows created via a
+    # central-auth token. Separate field, not a repurposed student_id —
+    # the two are different identity spaces (SMS-local int vs central-auth
+    # UUID) and can't share a column.
+    central_user_id = models.UUIDField(null=True, blank=True, db_index=True)
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='progress_records')
     is_completed = models.BooleanField(default=False)
     last_accessed = models.DateTimeField(auto_now=True)
@@ -102,6 +141,14 @@ class StudentContentProgress(models.Model):
 
     class Meta:
         unique_together = ('student_id', 'lesson')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['central_user_id', 'lesson'],
+                condition=models.Q(central_user_id__isnull=False),
+                name='uniq_central_user_lesson_progress',
+            ),
+        ]
 
     def __str__(self):
-        return f"Student {self.student_id} — {self.lesson.title} ({'done' if self.is_completed else 'in progress'})"
+        who = self.student_id if self.student_id is not None else self.central_user_id
+        return f"Student {who} — {self.lesson.title} ({'done' if self.is_completed else 'in progress'})"

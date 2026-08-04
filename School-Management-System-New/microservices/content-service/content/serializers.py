@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Module, Lesson, ContentItem, StudentContentProgress
+from central_auth.authentication import CentralAuthUser
 
 
 class ContentItemSerializer(serializers.ModelSerializer):
@@ -67,9 +68,21 @@ class LessonSerializer(serializers.ModelSerializer):
 
     def get_is_completed(self, obj):
         request = self.context.get('request')
-        if request and request.user and request.user.role == 'student':
+        if not (request and request.user):
+            return False
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            # No principal_type/role claim on central-auth tokens yet (see
+            # views.py's CONTENT_PROGRESS_PERM note) — checking central_user_id
+            # directly is harmless for a non-student (their central_user_id
+            # simply never matches any progress row) and avoids needing a
+            # role claim that doesn't exist.
             return StudentContentProgress.all_objects.filter(
-                student_id=request.user.id, lesson=obj, is_completed=True
+                central_user_id=user.id, lesson=obj, is_completed=True
+            ).exists()
+        if user.role == 'student':
+            return StudentContentProgress.all_objects.filter(
+                student_id=user.id, lesson=obj, is_completed=True
             ).exists()
         return False
 

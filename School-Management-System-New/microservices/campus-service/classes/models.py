@@ -19,6 +19,10 @@ SHIFT_CHOICES = [
 class Level(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C5: unfiltered manager — needed by the central-auth read path
+    # (see campus_service/dual_auth.py's central_tenant_qs). Not a schema
+    # change (no migration needed — a Manager isn't a field).
+    all_objects = models.Manager()
     """
     School levels: Pre-Primary, Primary, Secondary, etc.
     Now includes shift information for better organization.
@@ -140,6 +144,10 @@ class Level(CentralAuthFieldsMixin, models.Model):
 class Grade(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C5: unfiltered manager — needed by the central-auth read path
+    # (see campus_service/dual_auth.py's central_tenant_qs). Not a schema
+    # change (no migration needed — a Manager isn't a field).
+    all_objects = models.Manager()
     """
     Top-level grade (e.g., Grade 1, Grade 2)
     """

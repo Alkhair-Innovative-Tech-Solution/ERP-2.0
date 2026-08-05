@@ -26,6 +26,11 @@ class CentralAuthFieldsMixin(models.Model):
 class Campus(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C5: unfiltered manager — needed by the central-auth read path
+    # (see campus_service/dual_auth.py's central_tenant_qs), mirroring the
+    # all_objects manager ClassRoom already had. Not a schema change (no
+    # migration needed — a Manager isn't a field).
+    all_objects = models.Manager()
     STATUS_CHOICES = [
         ("active", "Active"),
         ("inactive", "Inactive"),

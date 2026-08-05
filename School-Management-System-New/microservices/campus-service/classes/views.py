@@ -11,6 +11,18 @@ from django.utils import timezone
 from .models import Level, Grade, ClassRoom
 from .serializers import LevelSerializer, GradeSerializer, ClassRoomSerializer
 from notifications.services import create_notification
+from central_auth.authentication import CentralAuthUser
+from campus_service.dual_auth import (
+    DualServiceSubscribed, DualRequiresPermission,
+    user_is_superadmin, get_org_and_tenant,
+    legacy_person_id, central_person_id, central_tenant_qs,
+)
+
+# Phase C5 endpoint -> sms.* permission map (see
+# docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md). Same fail-closed reasoning as
+# CAMPUS_MANAGE_PERM in campus/views.py — no sms.classroom.* permission
+# exists in the catalog either.
+CLASS_MANAGE_PERM = 'sms.classroom.manage'
 
 
 def _publish(routing_key, payload):
@@ -23,52 +35,77 @@ def _publish(routing_key, payload):
 class LevelViewSet(viewsets.ModelViewSet):
     queryset = Level.objects.all()
     serializer_class = LevelSerializer
-    
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
+
     # Filtering, search, and ordering
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'created_at']
     ordering = ['name']  # Default ordering
-    
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy',
+                            'assign_coordinator', 'unassign_coordinator', 'unassign_teacher'):
+            return [IsAuthenticated(), DualServiceSubscribed(), DualRequiresPermission(CLASS_MANAGE_PERM)()]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
-        queryset = Level.objects.select_related('campus')
-        
+        is_central = isinstance(user, CentralAuthUser)
+        queryset = (
+            central_tenant_qs(Level.all_objects.all(), user).select_related('campus')
+            if is_central
+            else Level.objects.select_related('campus')
+        )
+
         # If user is tied to a specific campus, restrict to that
         if getattr(user, 'campus', None):
             queryset = queryset.filter(campus=getattr(user, 'campus', None))
         # Otherwise, follow organizational scoping (manager handled)
-        
+
         # Filter by campus_id if provided via parameters
         campus_id = self.request.query_params.get('campus_id')
         if campus_id:
             queryset = queryset.filter(campus_id=campus_id)
-        
+
         return queryset
-    
+
     def perform_create(self, serializer):
         user = self.request.user
-        
+        is_central = isinstance(user, CentralAuthUser)
+
         # Automatically set organization if user belongs to one
         save_kwargs = {}
-        if not user.is_superadmin() and getattr(user, 'organization', None):
-            save_kwargs['organization'] = getattr(user, 'organization', None)
-            
-        # Existing logic for campus assignment
-        if user.is_principal():
-            campus_id = self.request.data.get('campus')
-            if campus_id:
-                from campus.models import Campus
-                try:
-                    campus = Campus.objects.get(id=campus_id)
-                    save_kwargs['campus'] = campus
-                except Campus.DoesNotExist:
+        if is_central:
+            # No local .organization/is_superadmin() method on this token —
+            # stamp tenant_id instead (see campus/views.py's perform_create
+            # for the same pattern). No principal role concept exists for
+            # CentralAuthUser (no principal_type claim — same gap flagged
+            # since B3/C1-C4), so the campus-required-for-principal
+            # validation below doesn't apply on this path — flagged in
+            # docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md, not silently dropped.
+            if not user_is_superadmin(user):
+                _, tenant_id = get_org_and_tenant(user)
+                save_kwargs['tenant_id'] = tenant_id
+        else:
+            if not user.is_superadmin() and getattr(user, 'organization', None):
+                save_kwargs['organization'] = getattr(user, 'organization', None)
+
+            # Existing logic for campus assignment
+            if user.is_principal():
+                campus_id = self.request.data.get('campus')
+                if campus_id:
+                    from campus.models import Campus
+                    try:
+                        campus = Campus.objects.get(id=campus_id)
+                        save_kwargs['campus'] = campus
+                    except Campus.DoesNotExist:
+                        from rest_framework.exceptions import ValidationError
+                        raise ValidationError({'campus': 'Invalid campus ID provided'})
+                else:
                     from rest_framework.exceptions import ValidationError
-                    raise ValidationError({'campus': 'Invalid campus ID provided'})
-            else:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError({'campus': 'Campus field is required for principals'})
-        
+                    raise ValidationError({'campus': 'Campus field is required for principals'})
+
         level = serializer.save(**save_kwargs)
         _publish('classes.level.created', {
             'id': level.id, 'name': level.name, 'code': level.code,
@@ -165,9 +202,14 @@ class LevelViewSet(viewsets.ModelViewSet):
             if not old_teacher:
                 return Response({'message': 'No teacher assigned'}, status=status.HTTP_200_OK)
 
-            # Clear classroom assignment
+            # Clear classroom assignment. assigned_by is a real FK to
+            # users.User — a CentralAuthUser isn't a users.User row and
+            # can't be assigned to it directly (ValueError at save time,
+            # same class of gap as C2's Payment.received_by); stamp the
+            # separate central_assigned_by_id UUID column instead.
             classroom.class_teacher = None
-            classroom.assigned_by = request.user
+            classroom.assigned_by = legacy_person_id(request.user)
+            classroom.central_assigned_by_id = central_person_id(request.user)
             classroom.assigned_at = timezone.now()
             classroom.save()
 
@@ -246,17 +288,24 @@ class LevelViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def unassign_classroom_teacher(request, pk: int):
     """Unassign the current class teacher (function-based alternative)."""
     try:
-        classroom = ClassRoom.objects.get(pk=pk)
+        classroom_base = (
+            central_tenant_qs(ClassRoom.all_objects.all(), request.user)
+            if isinstance(request.user, CentralAuthUser) else ClassRoom.objects
+        )
+        classroom = classroom_base.get(pk=pk)
         old_teacher = classroom.class_teacher
         if not old_teacher:
             return Response({'message': 'No teacher assigned'})
 
+        # assigned_by is a real FK to users.User — see the identical note
+        # in ClassRoomViewSet.unassign_teacher above.
         classroom.class_teacher = None
-        classroom.assigned_by = request.user
+        classroom.assigned_by = legacy_person_id(request.user)
+        classroom.central_assigned_by_id = central_person_id(request.user)
         classroom.assigned_at = timezone.now()
         classroom.save()
 
@@ -291,50 +340,67 @@ def unassign_classroom_teacher(request, pk: int):
 class GradeViewSet(viewsets.ModelViewSet):
     queryset = Grade.objects.all()
     serializer_class = GradeSerializer
-    
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
+
     # Filtering, search, and ordering
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'created_at']
     ordering = ['name']  # Default ordering
-    
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), DualServiceSubscribed(), DualRequiresPermission(CLASS_MANAGE_PERM)()]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
-        queryset = Grade.objects.select_related('level', 'level__campus')
-        
+        is_central = isinstance(user, CentralAuthUser)
+        queryset = (
+            central_tenant_qs(Grade.all_objects.all(), user).select_related('level', 'level__campus')
+            if is_central
+            else Grade.objects.select_related('level', 'level__campus')
+        )
+
         # Get query parameters
         level_id = self.request.query_params.get('level_id')
         campus_id = self.request.query_params.get('campus_id')
         shift = self.request.query_params.get('shift')
         unassigned = self.request.query_params.get('unassigned')
-        
+
         # If user is tied to a specific campus, restrict to that
         if getattr(user, 'campus', None):
             queryset = queryset.filter(Q(level__campus=getattr(user,'campus',None)) | Q(campus=getattr(user,'campus',None)))
         # Otherwise, apply campus_id filter if provided
         elif campus_id:
             queryset = queryset.filter(Q(level__campus_id=campus_id) | Q(campus_id=campus_id))
-            
+
         # Additional Filters
         if shift:
             queryset = queryset.filter(level__shift=shift)
         elif level_id:
             queryset = queryset.filter(level_id=level_id)
-            
+
         if unassigned == 'true':
             queryset = queryset.filter(level__isnull=True)
-            
+
         return queryset.distinct()
-    
+
     def perform_create(self, serializer):
+        user = self.request.user
+        is_central = isinstance(user, CentralAuthUser)
+
         # Validate that level is provided
         level_id = self.request.data.get('level')
         if not level_id:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'level': 'Level field is required'})
-        
-        # Validate that level exists and belongs to principal's campus
-        if hasattr(self.request.user, 'role') and self.request.user.role == 'principal':
+
+        # Validate that level exists and belongs to principal's campus.
+        # No principal role concept exists for CentralAuthUser (see
+        # LevelViewSet.perform_create's note) — this validation only
+        # applies on the legacy path.
+        if not is_central and hasattr(user, 'role') and user.role == 'principal':
             from classes.models import Level
             try:
                 level = Level.objects.get(id=level_id)
@@ -346,11 +412,15 @@ class GradeViewSet(viewsets.ModelViewSet):
             except Level.DoesNotExist:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({'level': 'Invalid level ID provided'})
-        
+
         # Automatically set organization if user belongs to one
         save_kwargs = {}
-        if not self.request.user.is_superadmin() and getattr(self.request.user, 'organization', None):
-            save_kwargs['organization'] = getattr(self.request.user, 'organization', None)
+        if is_central:
+            if not user_is_superadmin(user):
+                _, tenant_id = get_org_and_tenant(user)
+                save_kwargs['tenant_id'] = tenant_id
+        elif not user.is_superadmin() and getattr(user, 'organization', None):
+            save_kwargs['organization'] = getattr(user, 'organization', None)
 
         grade = serializer.save(**save_kwargs)
         _publish('classes.grade.created', {
@@ -370,17 +440,30 @@ class GradeViewSet(viewsets.ModelViewSet):
 class ClassRoomViewSet(viewsets.ModelViewSet):
     queryset = ClassRoom.objects.all()
     serializer_class = ClassRoomSerializer
-    
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
+
     # Filtering, search, and ordering
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     search_fields = ['code', 'section']
     ordering_fields = ['code', 'section', 'created_at']
     ordering = ['code', 'section']  # Default ordering
-    
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy', 'assign_teacher'):
+            return [IsAuthenticated(), DualServiceSubscribed(), DualRequiresPermission(CLASS_MANAGE_PERM)()]
+        return super().get_permissions()
+
     def perform_create(self, serializer):
         user = self.request.user
         save_kwargs = {}
-        if not user.is_superadmin():
+        if isinstance(user, CentralAuthUser):
+            # No local .organization/org_id/is_superadmin() method on this
+            # token — stamp tenant_id instead (see campus/views.py's
+            # perform_create for the same pattern).
+            if not user_is_superadmin(user):
+                _, tenant_id = get_org_and_tenant(user)
+                save_kwargs['tenant_id'] = tenant_id
+        elif not user.is_superadmin():
             # Prefer org object from user attr; fall back to org_id JWT claim via middleware context
             org = getattr(user, 'organization', None)
             if org is None:
@@ -438,10 +521,12 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        queryset = ClassRoom.objects.select_related(
-            'grade', 'grade__level', 'grade__level__campus', 'class_teacher'
-        )
-        
+        queryset = (
+            central_tenant_qs(ClassRoom.all_objects.all(), user)
+            if isinstance(user, CentralAuthUser)
+            else ClassRoom.objects
+        ).select_related('grade', 'grade__level', 'grade__level__campus', 'class_teacher')
+
         # Get query parameters
         grade_id = self.request.query_params.get('grade_id')
         level_id = self.request.query_params.get('level_id')
@@ -505,12 +590,19 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
         - Does NOT exclude teachers who already have classes (unlimited assignments allowed)
         """
         from teachers.models import Teacher
-        
+
         campus_id = request.query_params.get('campus_id')
         shift_param = request.query_params.get('shift')
         user = request.user
-        
-        teachers = Teacher.objects.filter(is_class_teacher=True)
+
+        # Teacher.objects is OrganizationManager-backed — empty for a
+        # central-auth request (see campus_service/dual_auth.py's module
+        # docstring). FLAGGED: Teacher has no tenant_id of its own (lives in
+        # staff-service, out of scope to touch here — same residual gap as
+        # C3/C4's find_teacher), so this is _base_manager (unscoped), not a
+        # tenant-filtered queryset.
+        teacher_base = Teacher._base_manager if isinstance(user, CentralAuthUser) else Teacher.objects
+        teachers = teacher_base.filter(is_class_teacher=True)
 
         # Campus filter
         if campus_id:
@@ -530,9 +622,7 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def unassigned_classrooms(self, request):
         """Get classrooms that don't have a class teacher"""
-        unassigned = ClassRoom.objects.filter(
-            class_teacher__isnull=True
-        )
+        unassigned = self.get_queryset().filter(class_teacher__isnull=True)
         serializer = self.get_serializer(unassigned, many=True)
         return Response(serializer.data)
     
@@ -550,10 +640,15 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
         
         try:
             from teachers.models import Teacher
-            
-            # Get the teacher
-            teacher = Teacher.objects.get(id=teacher_id)
-            
+
+            # Get the teacher. Teacher.objects is OrganizationManager-
+            # backed — empty for a central-auth request (see
+            # campus_service/dual_auth.py's module docstring); _base_manager
+            # instead on that path (same residual unscoped-by-tenant gap as
+            # available_teachers above).
+            teacher_base = Teacher._base_manager if isinstance(request.user, CentralAuthUser) else Teacher.objects
+            teacher = teacher_base.get(id=teacher_id)
+
             # Validate teacher belongs to same campus
             if classroom.campus != teacher.current_campus:
                 return Response(
@@ -582,16 +677,25 @@ class ClassRoomViewSet(viewsets.ModelViewSet):
             # Store old teacher for cleanup
             old_teacher = classroom.class_teacher
             
-            # Update classroom
+            # Update classroom. assigned_by is a real FK to users.User — see
+            # the identical note in ClassRoomViewSet.unassign_teacher.
             classroom.class_teacher = teacher
-            classroom.assigned_by = request.user
+            classroom.assigned_by = legacy_person_id(request.user)
+            classroom.central_assigned_by_id = central_person_id(request.user)
             classroom.assigned_at = timezone.now()
             classroom.save()
-            
+
             # Update new teacher profile
             teacher.assigned_classroom = classroom  # LEGACY single-class link (keeps last assigned)
             teacher.is_class_teacher = True
-            teacher.classroom_assigned_by = request.user
+            # Teacher.classroom_assigned_by is also a real FK to users.User,
+            # but Teacher lives in staff-service (out of scope to touch from
+            # this campus-service-scoped phase — no central_*_id column
+            # exists there to hold the central-auth identity instead).
+            # FLAGGED: left unset on the central-auth path rather than
+            # crashing teacher.save() below; see
+            # docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md.
+            teacher.classroom_assigned_by = legacy_person_id(request.user)
             teacher.classroom_assigned_at = timezone.now()
             # Skip generic "profile updated" notification; we'll send a specific one
             setattr(teacher, '_skip_profile_notification', True)

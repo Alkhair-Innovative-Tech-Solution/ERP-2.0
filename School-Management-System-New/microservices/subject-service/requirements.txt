@@ -11,4 +11,6 @@ gunicorn
 whitenoise
 Pillow
 pika
+requests==2.32.3
+cryptography==42.0.5
 ams-shared @ file:///app/ams-shared

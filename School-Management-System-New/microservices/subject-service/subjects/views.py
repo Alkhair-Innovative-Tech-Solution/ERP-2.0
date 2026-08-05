@@ -11,46 +11,56 @@ from .serializers import (
     SubjectTeacherAssignmentSerializer, SubjectTeacherAssignmentCreateSerializer,
 )
 from users.models import Organization
+from central_auth.authentication import CentralAuthUser
+from subject_service.dual_auth import (
+    DualServiceSubscribed, DualRequiresPermission,
+    user_role, get_org_and_tenant, resolve_staff_teacher_id,
+    legacy_person_id, central_person_id, central_tenant_qs,
+)
+
+# Phase C4 endpoint -> sms.* permission map (see
+# docs/PHASE_C4_SUBJECT_SERVICE_RESULT.md's "Endpoint -> permission map" for
+# the full table). No sms.subject.* permission exists in central auth's
+# catalog at all (only sms.assignment.*, sms.fee.*, sms.result.view — none
+# is a match for subject/curriculum management). Per the rules, no
+# permission was invented/added to the catalog from this subject-service-
+# scoped task — referencing this codename means every non-superadmin
+# central-auth token currently gets 403 on subject/assignment-of-teacher
+# writes, fail-closed, until a future catalog step adds it. Reads (list/
+# retrieve/my-subjects/my-classrooms) are gated by DualServiceSubscribed
+# only, matching "endpoints requiring no special perm should work".
+SUBJECT_MANAGE_PERM = 'sms.subject.manage'
 
 
 def _resolve_teacher_id(user):
-    """Resolve the Teacher entity PK for the logged-in user.
+    """Resolve the Teacher entity PK (an int) for the logged-in user.
 
     Assignments store teacher_id = Teacher entity PK (from staff-service),
     but the JWT only carries the User PK. We map them via the employee_code,
     which equals the JWT username. Looked up directly in staff_db (psycopg2).
-    Falls back to user.id if the lookup fails.
+
+    Legacy: falls back to user.id if the lookup fails — unchanged, exact
+    original behavior.
+
+    Phase C4 / CentralAuthUser: the lookup itself is dual-safe (delegates to
+    subject_service.dual_auth.resolve_staff_teacher_id, identifier is
+    CentralAuthUser.employee_code instead of legacy .username — same SQL).
+    If it fails to resolve, returns None rather than falling back to
+    user.id — a UUID can't be used as this int PK, and doing so would send
+    a UUID string into a raw SQL query against an integer column
+    (timetable_db's teacher_id) in _derive_classrooms_from_timetable,
+    erroring or silently matching nothing. Callers on the central-auth path
+    check for None explicitly.
     """
-    import os
-    username = getattr(user, 'username', None)
-    if not username:
-        return user.id
-    try:
-        import psycopg2
-        conn = psycopg2.connect(
-            host=os.environ.get('STAFF_DB_HOST', 'postgres-staff'),
-            dbname=os.environ.get('STAFF_DB_NAME', 'staff_db'),
-            user=os.environ.get('STAFF_DB_USER', 'staff_user'),
-            password=os.environ.get('STAFF_DB_PASSWORD', 'staff_pass'),
-            connect_timeout=5,
-        )
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT id FROM teachers_teacher WHERE employee_code = %s AND is_deleted = false LIMIT 1",
-                    (username,),
-                )
-                row = cur.fetchone()
-                if row:
-                    return row[0]
-        finally:
-            conn.close()
-    except Exception:
-        pass
+    resolved = resolve_staff_teacher_id(user)
+    if resolved is not None:
+        return resolved
+    if isinstance(user, CentralAuthUser):
+        return None
     return user.id
 
 
-def _derive_classrooms_from_timetable(teacher_id, org):
+def _derive_classrooms_from_timetable(teacher_id, org, tenant_id=None):
     """Build the teacher's (subject, classroom) list from their TIMETABLE.
 
     The timetable (set by the coordinator) is the single source of truth for
@@ -58,8 +68,20 @@ def _derive_classrooms_from_timetable(teacher_id, org):
     from timetable_db and map each subject name to a local subjects.Subject
     (get_or_create), because LMS assignments FK to subjects.Subject.
     Returns dicts shaped like SubjectTeacherAssignmentSerializer output.
+
+    Phase C4: teacher_id may be None on the central-auth path (no matching
+    staff-service Teacher row — see _resolve_teacher_id) — nothing to query
+    the timetable by, so return [] immediately rather than sending None into
+    the raw SQL WHERE clause. tenant_id (only set for a CentralAuthUser
+    caller) makes the Subject get_or_create dual-safe: Subject.objects is
+    OrganizationManager-backed (see subject_service/dual_auth.py's module
+    docstring) — empty for a central-auth request regardless of the
+    organization=org (=None) filter, so this uses Subject.all_objects +
+    explicit tenant_id filtering on that path instead, unchanged on legacy.
     """
     import os
+    if teacher_id is None:
+        return []
     rows = []
     try:
         import psycopg2
@@ -106,9 +128,16 @@ def _derive_classrooms_from_timetable(teacher_id, org):
             continue
         seen.add(key)
         # Map timetable subject name -> local subjects.Subject (for the assignment FK)
-        subject = Subject.objects.filter(organization=org, name__iexact=name, is_deleted=False).first()
-        if not subject:
-            subject = Subject.objects.create(organization=org, name=name)
+        if tenant_id:
+            subject = Subject.all_objects.filter(
+                tenant_id=tenant_id, name__iexact=name, is_deleted=False
+            ).first()
+            if not subject:
+                subject = Subject.all_objects.create(organization=org, tenant_id=tenant_id, name=name)
+        else:
+            subject = Subject.objects.filter(organization=org, name__iexact=name, is_deleted=False).first()
+            if not subject:
+                subject = Subject.objects.create(organization=org, name=name)
         shift = (r.get('shift') or '').capitalize()
         label_core = f"{r.get('grade_name') or ''} - {r.get('section') or ''}".strip(' -')
         classroom_label = f"{label_core} ({shift})" if shift else label_core
@@ -127,25 +156,29 @@ def _derive_classrooms_from_timetable(teacher_id, org):
     return result
 
 
-def _get_org(user):
-    org_id = getattr(user, 'org_id', None)
-    if not org_id:
-        return None
-    org, _ = Organization.all_objects.get_or_create(
-        id=org_id, defaults={'name': f'Org-{org_id}'}
-    )
-    return org
-
-
 class SubjectViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['grade_id', 'campus_id', 'is_active']
     search_fields = ['name', 'subject_code']
     ordering_fields = ['name', 'created_at']
     ordering = ['name']
 
+    def get_permissions(self):
+        # Writes need SUBJECT_MANAGE_PERM (flagged — not yet in the
+        # catalog, see module docstring); reads need only the subscription
+        # check already in permission_classes.
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), DualServiceSubscribed(), DualRequiresPermission(SUBJECT_MANAGE_PERM)()]
+        return super().get_permissions()
+
     def get_queryset(self):
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            # Subject.objects is OrganizationManager-backed — empty for a
+            # central-auth request (see subject_service/dual_auth.py's
+            # module docstring).
+            return central_tenant_qs(Subject.all_objects.filter(is_deleted=False), user)
         return Subject.objects.filter(is_deleted=False)
 
     def get_serializer_class(self):
@@ -154,7 +187,8 @@ class SubjectViewSet(viewsets.ModelViewSet):
         return SubjectSerializer
 
     def perform_create(self, serializer):
-        serializer.save(organization=_get_org(self.request.user))
+        org, tenant_id = get_org_and_tenant(self.request.user)
+        serializer.save(organization=org, tenant_id=tenant_id)
 
     def destroy(self, request, *args, **kwargs):
         subject = self.get_object()
@@ -167,24 +201,33 @@ class SubjectViewSet(viewsets.ModelViewSet):
     def my_subjects(self, request):
         """Teacher sees their assigned subjects; student sees subjects for their classroom."""
         user = request.user
-        if user.role == 'teacher':
+        is_central = isinstance(user, CentralAuthUser)
+        org, tenant_id = get_org_and_tenant(user)
+        subject_base = (
+            central_tenant_qs(Subject.all_objects.filter(is_deleted=False), user)
+            if is_central else Subject.objects.filter(is_deleted=False)
+        )
+        assignment_base = (
+            central_tenant_qs(SubjectTeacherAssignment.all_objects.all(), user)
+            if is_central else SubjectTeacherAssignment.objects.all()
+        )
+        role = user_role(user)
+        if role == 'teacher':
             teacher_id = _resolve_teacher_id(user)
-            derived = _derive_classrooms_from_timetable(teacher_id, _get_org(user))
+            derived = _derive_classrooms_from_timetable(teacher_id, org, tenant_id=tenant_id)
             subject_ids = [d['subject'] for d in derived]
-            qs = Subject.objects.filter(id__in=subject_ids, is_deleted=False)
-        elif user.role == 'student':
+            qs = subject_base.filter(id__in=subject_ids)
+        elif role == 'student':
             classroom_id = getattr(user, 'campus_id', None)  # campus_id claim used as classroom_id
             # classroom_id comes from query param for student
             classroom_id = request.query_params.get('classroom_id', classroom_id)
             if not classroom_id:
                 return Response([])
-            assignments = SubjectTeacherAssignment.objects.filter(
-                classroom_id=classroom_id, is_active=True
-            )
+            assignments = assignment_base.filter(classroom_id=classroom_id, is_active=True)
             subject_ids = assignments.values_list('subject_id', flat=True).distinct()
-            qs = Subject.objects.filter(id__in=subject_ids, is_deleted=False)
+            qs = subject_base.filter(id__in=subject_ids)
         else:
-            qs = Subject.objects.filter(is_deleted=False)
+            qs = subject_base
         serializer = SubjectSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -192,20 +235,29 @@ class SubjectViewSet(viewsets.ModelViewSet):
     def my_classrooms(self, request):
         """Return SubjectTeacherAssignment records for the current teacher (with classroom info)."""
         user = request.user
-        if user.role != 'teacher':
+        if user_role(user) != 'teacher':
             return Response([])
         teacher_id = _resolve_teacher_id(user)
+        org, tenant_id = get_org_and_tenant(user)
         # Timetable is the source of truth — derive classes+subjects from it.
-        return Response(_derive_classrooms_from_timetable(teacher_id, _get_org(user)))
+        return Response(_derive_classrooms_from_timetable(teacher_id, org, tenant_id=tenant_id))
 
 
 class SubjectTeacherAssignmentViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['teacher_id', 'classroom_id', 'subject', 'academic_year', 'is_active']
     search_fields = ['teacher_name', 'classroom_label', 'subject__name']
 
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), DualServiceSubscribed(), DualRequiresPermission(SUBJECT_MANAGE_PERM)()]
+        return super().get_permissions()
+
     def get_queryset(self):
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            return central_tenant_qs(SubjectTeacherAssignment.all_objects.all(), user)
         return SubjectTeacherAssignment.objects.all()
 
     def get_serializer_class(self):
@@ -215,7 +267,10 @@ class SubjectTeacherAssignmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        org, tenant_id = get_org_and_tenant(user)
         serializer.save(
-            organization=_get_org(user),
-            assigned_by_id=user.id,
+            organization=org,
+            tenant_id=tenant_id,
+            assigned_by_id=legacy_person_id(user),
+            central_assigned_by_id=central_person_id(user),
         )

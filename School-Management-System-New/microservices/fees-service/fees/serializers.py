@@ -105,7 +105,9 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = '__all__'
-        read_only_fields = ['receipt_number', 'received_by']
+        # central_user_id: same reasoning as received_by (also read-only) —
+        # set server-side only (views.py), never client-suppliable.
+        read_only_fields = ['receipt_number', 'received_by', 'central_user_id']
 
 class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:

@@ -205,20 +205,44 @@ class FeeService:
 
     @staticmethod
     @transaction.atomic
-    def record_payment(student_fee_id, amount, method, received_by=None, bank_details=None):
+    def record_payment(student_fee_id, amount, method, received_by=None, bank_details=None, central_user_id=None, student_fee=None):
         """
         Records a payment and allocates it using FIFO (First-In-First-Out)
         to the oldest outstanding balances for the student.
+
+        received_by: a real users.User (or legacy _TokenUser) — unchanged,
+            existing callers keep working exactly as before.
+        central_user_id: Phase C2 — a central-auth identity's UUID, for
+            payments recorded by a CentralAuthUser (can't be assigned to
+            the real `received_by` FK, see Payment.central_user_id).
+            Optional, additive — never both at once in practice.
+        student_fee: Phase C2 — an already-fetched, already tenant-verified
+            StudentFee instance. When given, the internal lookup below
+            (StudentFee.objects.get(...), which is OrganizationManager-
+            filtered) is skipped entirely — needed because that manager's
+            contextvar-based filtering goes empty for central-auth requests
+            (same OrganizationMiddleware blind spot as views.py; see
+            dual_auth.py), and this service function must NOT silently
+            switch to an unfiltered lookup (that would remove the legacy
+            path's implicit org-safety too). Callers on the central-auth
+            path pre-fetch via the same tenant filter views.py uses
+            elsewhere and pass the verified instance here; legacy callers
+            keep passing only student_fee_id and get the EXACT original
+            behavior, unchanged.
         """
-        primary_fee = StudentFee.objects.select_for_update().get(id=student_fee_id)
+        if student_fee is not None:
+            primary_fee = StudentFee._base_manager.select_for_update().get(id=student_fee.id)
+        else:
+            primary_fee = StudentFee.objects.select_for_update().get(id=student_fee_id)
         student = primary_fee.student
-        
+
         # 1. Create the Payment record (linked to the fee they intended to pay)
         payment = Payment.objects.create(
             student_fee=primary_fee,
             amount=amount,
             method=method,
             received_by=received_by,
+            central_user_id=central_user_id,
             bank_name=bank_details.get('bank_name') if bank_details else None,
             transaction_id=bank_details.get('transaction_id') if bank_details else None,
             deposit_date=bank_details.get('deposit_date') if bank_details else None,

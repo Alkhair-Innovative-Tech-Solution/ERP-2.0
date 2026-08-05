@@ -608,6 +608,8 @@ services:
       DB_PASSWORD: ${FEES_DB_PASS:-fees_pass}
       REDIS_URL: redis://redis:6379/8
       STUDENT_SERVICE_URL: http://student-service:8005
+      # Phase C2: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-fees:
         condition: service_healthy

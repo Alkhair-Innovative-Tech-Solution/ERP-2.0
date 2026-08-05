@@ -14,3 +14,7 @@ pika
 pandas>=2.1.0
 django-phonenumber-field[phonenumbers]
 ams-shared @ file:///app/ams-shared
+
+# Phase C2: central auth JWKS verification (central_auth/ package)
+requests==2.32.3
+cryptography==42.0.5

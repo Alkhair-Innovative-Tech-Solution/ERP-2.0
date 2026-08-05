@@ -3,7 +3,30 @@ from django.utils import timezone
 from users.managers import OrganizationManager
 
 
-class BankAccount(models.Model):
+class CentralAuthFieldsMixin(models.Model):
+    """
+    Phase C2: additive, nullable fields for the central-auth repoint.
+    Same shape as content-service's C1 mixin — dual-run, existing
+    `organization` FK / OrganizationManager untouched.
+
+    tenant_id:       stamped from the verified token's tenant_id claim,
+                      used to scope reads for central-auth requests
+                      (views.py branches on isinstance(user, CentralAuthUser)
+                      and filters on this instead of `organization`).
+    central_org_id:   maps this row's local `users.Organization` to its
+                      central-auth Organization equivalent. Not yet
+                      populated by anything (SMS is single-org today,
+                      no real backfill data exists per Phase B0) — present
+                      so the column exists when it's needed.
+    """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        abstract = True
+
+
+class BankAccount(CentralAuthFieldsMixin):
     organization = models.ForeignKey(
         'users.Organization', on_delete=models.CASCADE,
         null=True, blank=True, related_name='bank_accounts'
@@ -18,7 +41,7 @@ class BankAccount(models.Model):
     def __str__(self):
         return f"{self.bank_name} — {self.account_title}"
 
-class FeeType(models.Model):
+class FeeType(CentralAuthFieldsMixin):
     FREQUENCY_CHOICES = [
         ('daily', 'Daily'),
         ('monthly', 'Monthly'),
@@ -39,7 +62,7 @@ class FeeType(models.Model):
         return f"{self.name} ({self.get_frequency_display()})"
 
 
-class FeeStructure(models.Model):
+class FeeStructure(CentralAuthFieldsMixin):
     objects = OrganizationManager()
     
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='fee_structures')
@@ -71,7 +94,7 @@ class FeeLineItem(models.Model):
         return f"{self.fee_structure.name} - {self.fee_type.name}: {self.amount}"
 
 
-class StudentFee(models.Model):
+class StudentFee(CentralAuthFieldsMixin):
     STATUS_CHOICES = [
         ('unpaid', 'Unpaid'),
         ('issued', 'Issued'),
@@ -137,6 +160,13 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='cash')
     received_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True)
+    # Phase C2: central-auth staff id who recorded this payment. A
+    # CentralAuthUser isn't a users.User row, so it can't be assigned to
+    # `received_by` (a real FK) — this is the separate field the recipe
+    # calls for. No `organization`/tenant_id needed on Payment itself; it's
+    # already scoped via student_fee.organization (legacy) / student_fee's
+    # own tenant_id (central-auth), matching the existing query pattern.
+    central_user_id = models.UUIDField(null=True, blank=True, db_index=True)
     payment_date = models.DateField(default=timezone.now)
     receipt_number = models.CharField(max_length=50, unique=True, blank=True)
     
@@ -187,6 +217,10 @@ class PaymentTransaction(models.Model):
         'users.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='verified_transactions'
     )
+    # Phase C2: same reasoning as Payment.central_user_id above — a
+    # CentralAuthUser can't be assigned to verified_by (a real FK to
+    # users.User).
+    central_verified_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
 

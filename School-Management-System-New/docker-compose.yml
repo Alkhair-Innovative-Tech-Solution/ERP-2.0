@@ -577,6 +577,8 @@ services:
       REDIS_URL: redis://redis:6379/7
       STUDENT_SERVICE_URL: http://student-service:8005
       TIMETABLE_SERVICE_URL: http://timetable-service:8009
+      # Phase C3: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       STUDENT_DB_HOST: postgres-student
       STUDENT_DB_NAME: student_db
       STUDENT_DB_USER: student_user

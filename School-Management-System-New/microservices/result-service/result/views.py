@@ -16,16 +16,25 @@ from .serializers import (
     ResultSubmitSerializer, ResultApprovalSerializer, PrincipalResultApprovalSerializer,
     ResultListSerializer
 )
-from users.permissions import IsTeacher, IsCoordinator, IsCoordinatorOrAbove, IsPrincipal, IsStudent
+from result.dual_auth import (
+    DualServiceSubscribed,
+    DualIsTeacher as IsTeacher,
+    DualIsCoordinator as IsCoordinator,
+    DualIsCoordinatorOrAbove as IsCoordinatorOrAbove,
+    DualIsPrincipal as IsPrincipal,
+    DualIsStudent as IsStudent,
+    user_is_teacher, user_is_coordinator, user_is_principal, user_is_superuser,
+    find_teacher, find_coordinator, find_principal,
+    central_tenant_qs,
+)
+from central_auth.authentication import CentralAuthUser
 from teachers.models import Teacher
 from students.models import Student
 from principals.models import Principal
 
 def _get_teacher(user):
-    """Look up Teacher by email (from JWT) or employee_code (username fallback)."""
-    teacher = Teacher.objects.filter(
-        Q(email=user.email) | Q(employee_code=user.username)
-    ).first()
+    """Look up Teacher — dual-safe (see result/dual_auth.py:find_teacher)."""
+    teacher = find_teacher(user)
     if not teacher:
         from django.http import Http404
         raise Http404("No Teacher matches the given query.")
@@ -33,11 +42,8 @@ def _get_teacher(user):
 
 
 def _get_coordinator(user):
-    """Look up Coordinator by email (from JWT) or employee_code (username fallback)."""
-    from coordinator.models import Coordinator as Coord
-    coordinator = Coord.objects.filter(
-        Q(email=user.email) | Q(employee_code=user.username)
-    ).first()
+    """Look up Coordinator — dual-safe (see result/dual_auth.py:find_coordinator)."""
+    coordinator = find_coordinator(user)
     if not coordinator:
         from django.http import Http404
         raise Http404("No Coordinator matches the given query.")
@@ -45,10 +51,22 @@ def _get_coordinator(user):
 
 
 def _get_principal(user):
-    # Try DB first; JWT _TokenUser has campus_id directly so DB may be empty
-    return Principal.objects.filter(
-        Q(email=user.email) | Q(employee_code=user.username)
-    ).first()  # Returns None if not synced — callers handle None
+    # Dual-safe (see result/dual_auth.py:find_principal). Try DB first; JWT
+    # _TokenUser has campus_id directly so DB may be empty.
+    return find_principal(user)  # Returns None if not synced — callers handle None
+
+
+def _result_base_qs(user):
+    """Dual-safe base queryset for Result. Legacy: Result.objects (unchanged,
+    OrganizationManager-filtered via request-scoped contextvars). CentralAuthUser:
+    Result.all_objects + explicit tenant_id filter — the shared
+    OrganizationMiddleware never populates its contextvars for central-auth
+    requests, so Result.objects would silently return nothing (see
+    dual_auth.py's module docstring)."""
+    if isinstance(user, CentralAuthUser):
+        return central_tenant_qs(Result.all_objects.filter(is_deleted=False), user)
+    return Result.objects.all()
+
 
 def _get_principal_campus_id(user):
     """Always returns campus_id — from DB principal or JWT claim directly."""
@@ -75,22 +93,30 @@ class PrincipalResultApprovalView(generics.UpdateAPIView):
     def get_object(self):
         campus_id = _get_principal_campus_id(self.request.user)
         return get_object_or_404(
-            Result,
+            _result_base_qs(self.request.user),
             id=self.kwargs['pk'],
             student__campus_id=campus_id,
             status='pending_principal'
         )
 
     def perform_update(self, serializer):
-        principal = _get_principal(self.request.user)
+        user = self.request.user
+        principal = _get_principal(user)
         status_val = self.request.data.get('status', 'approved')
-        
+
+        extra = {}
+        if isinstance(user, CentralAuthUser) and status_val == 'approved':
+            # Principal IS request.user here — its own central-auth id is
+            # exactly the right value for central_approved_by_principal_id.
+            extra['central_approved_by_principal_id'] = user.id
+
         result = serializer.save(
             status=status_val,
             approved_by_principal=principal if status_val == 'approved' else None,
             approved_by_principal_at=timezone.now() if status_val == 'approved' else None,
             principal_signature=self.request.data.get('signature') if status_val == 'approved' else None,
-            principal_signed_at=timezone.now() if status_val == 'approved' else None
+            principal_signed_at=timezone.now() if status_val == 'approved' else None,
+            **extra,
         )
         
         # === PROMOTION TO SECTION E ===
@@ -298,7 +324,7 @@ def with_result_relations(qs):
 class ResultViewSet(viewsets.ModelViewSet):
     queryset = Result.objects.all()
     serializer_class = ResultSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'exam_type', 'student', 'student__classroom', 'month']
     search_fields = ['student__name', 'student__student_code']
@@ -306,6 +332,28 @@ class ResultViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            # Central-auth branch: same role logic, but through the
+            # tenant-scoped base manager (see _result_base_qs — Result.objects
+            # silently returns nothing for this token type).
+            base = _result_base_qs(user)
+            if user_is_superuser(user):
+                return with_result_relations(base)
+            elif user_is_teacher(user):
+                teacher = _get_teacher(user)
+                return base.filter(teacher=teacher)
+            elif user_is_coordinator(user):
+                coordinator = _get_coordinator(user)
+                return base.filter(coordinator=coordinator)
+            elif user_is_principal(user):
+                try:
+                    campus_id = _get_principal_campus_id(user)
+                    return base.filter(student__campus_id=campus_id).select_related('student', 'teacher', 'student__classroom')
+                except Exception:
+                    return Result.all_objects.none()
+            return Result.all_objects.none()
+
+        # Legacy — unchanged.
         if user.is_superuser:
             return with_result_relations(Result.objects.all())
         elif user.is_teacher():
@@ -337,21 +385,33 @@ class ResultViewSet(viewsets.ModelViewSet):
         return ResultSerializer
 
     def perform_create(self, serializer):
+        user = self.request.user
         # Check if final term can be created (mid-term must exist and be approved)
         exam_type = serializer.validated_data.get('exam_type')
         student = serializer.validated_data.get('student')
-        
+
         if exam_type == 'final':
-            midterm_exists = Result.objects.filter(
+            midterm_exists = _result_base_qs(user).filter(
                 student=student,
                 exam_type='midterm',
                 status='approved'
             ).exists()
-            
+
             if not midterm_exists:
                 raise serializers.ValidationError("Mid-term result must be approved before creating final-term result")
 
-        serializer.save(organization_id=self.request.user.org_id)
+        if isinstance(user, CentralAuthUser):
+            # No local org_id on this token — stamp tenant_id instead, leave
+            # the legacy organization FK null (see dual_auth.py docstring).
+            # student/teacher come straight from the request payload here
+            # (not resolved from the acting user), so their central-auth
+            # identity isn't independently known — left unset. FLAGGED: unlike
+            # TeacherResultListView.perform_create below (the endpoint the
+            # C3 proof actually exercises), this generic viewset create path
+            # does not attempt to derive central_student_id/central_teacher_id.
+            serializer.save(organization_id=None, tenant_id=user.tenant_id)
+        else:
+            serializer.save(organization_id=user.org_id)
 
     @action(detail=False, methods=['post'], url_path='forward-class')
     def forward_class_results(self, request):
@@ -375,7 +435,7 @@ class ResultViewSet(viewsets.ModelViewSet):
             return Response({'error': 'No students found in this classroom'}, status=status.HTTP_404_NOT_FOUND)
 
         # Find existing results for these students
-        result_query = Result.objects.filter(
+        result_query = _result_base_qs(request.user).filter(
             student__in=students_in_class,
             exam_type=exam_type
         )
@@ -441,37 +501,50 @@ class TeacherResultListView(generics.ListCreateAPIView):
         return ResultCreateSerializer
 
     def get_queryset(self):
-        teacher = _get_teacher(self.request.user)
-        qs = Result.objects.filter(teacher=teacher).order_by('-created_at')
+        user = self.request.user
+        teacher = _get_teacher(user)
+        qs = _result_base_qs(user).filter(teacher=teacher).order_by('-created_at')
         classroom_id = self.request.query_params.get('classroom')
         if classroom_id:
             qs = qs.filter(student__classroom_id=classroom_id)
         return qs
 
     def perform_create(self, serializer):
-        teacher = _get_teacher(self.request.user)
+        user = self.request.user
+        teacher = _get_teacher(user)
 
         # Check if final term can be created
         exam_type = serializer.validated_data.get('exam_type')
         student = serializer.validated_data.get('student')
-        
+
         if exam_type == 'final':
-            midterm_exists = Result.objects.filter(
+            midterm_exists = _result_base_qs(user).filter(
                 student=student,
                 exam_type='midterm',
                 status='approved'
             ).exists()
-            
+
             if not midterm_exists:
                 raise serializers.ValidationError("Mid-term result must be approved before creating final-term result")
-        
+
         # Verify teacher has assigned coordinator (but don't assign yet)
         if not teacher.assigned_coordinators.exists():
             raise serializers.ValidationError("No coordinator assigned to this teacher")
-        
+
         # Save result in draft status without coordinator
-        # Coordinator will be assigned when teacher submits the result
-        serializer.save(teacher=teacher, status='draft', organization_id=self.request.user.org_id)
+        # Coordinator will be assigned when teacher submits the result.
+        # Central-auth: no local org_id on this token — stamp tenant_id
+        # instead, leave organization null; the acting teacher IS request.user
+        # here (unlike ResultViewSet.perform_create), so its own central-auth
+        # id is exactly the right value for central_teacher_id.
+        if isinstance(user, CentralAuthUser):
+            serializer.save(
+                teacher=teacher, status='draft',
+                organization_id=None, tenant_id=user.tenant_id,
+                central_teacher_id=user.id, central_student_id=None,
+            )
+        else:
+            serializer.save(teacher=teacher, status='draft', organization_id=user.org_id)
 
 class CoordinatorResultListView(generics.ListAPIView):
     """Get all results assigned to coordinator for review"""
@@ -499,7 +572,7 @@ class CheckMidTermView(generics.RetrieveAPIView):
     def get(self, request, student_id):
         try:
             student = Student.objects.get(id=student_id)
-            midterm_exists = Result.objects.filter(
+            midterm_exists = _result_base_qs(request.user).filter(
                 student=student,
                 exam_type='midterm',
                 status='approved'
@@ -524,7 +597,7 @@ class ResultSubmitView(generics.UpdateAPIView):
 
     def get_object(self):
         teacher = _get_teacher(self.request.user)
-        return get_object_or_404(Result, id=self.kwargs['pk'], teacher=teacher)
+        return get_object_or_404(_result_base_qs(self.request.user), id=self.kwargs['pk'], teacher=teacher)
 
     def perform_update(self, serializer):
         result = self.get_object()
@@ -983,7 +1056,7 @@ def _handle_final_promotion(result, actor):
 # ─── Task 7: Student portal ───────────────────────────────────────────────────
 
 class StudentMyResultsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         user = request.user
@@ -1280,7 +1353,7 @@ class ResultApprovalView(generics.UpdateAPIView):
 
 class CalculatePositionsView(APIView):
     """Calculate and store class positions for a given classroom + exam type."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def post(self, request):
         classroom_id = request.data.get('classroom_id')
@@ -1670,7 +1743,7 @@ from .services.result_csv_import import import_results_from_csv
 
 class ResultsBulkUploadView(APIView):
     """Accepts a multipart file upload (CSV) and imports results using the existing service."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -1816,7 +1889,7 @@ class TemplateDataMixin:
 
 class SampleMonthlyTemplateView(TemplateDataMixin, APIView):
     # Require authentication so we can return teacher-specific subject hints
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def _get_campus_subjects(self, request):
         try:
@@ -1903,7 +1976,7 @@ class SampleMonthlyTemplateView(TemplateDataMixin, APIView):
 
 class SampleMidTemplateView(TemplateDataMixin, APIView):
     # require auth for teacher-specific subject hints
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def _get_campus_subjects(self, request):
         try:
@@ -1995,7 +2068,7 @@ class SampleMidTemplateView(TemplateDataMixin, APIView):
 
 class SampleFinalTemplateView(TemplateDataMixin, APIView):
     # Require authentication for teacher-specific subject hints
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def _get_campus_subjects(self, request):
         try:
@@ -2100,7 +2173,7 @@ class AvailableSubjectsView(APIView):
     - If no level-specific subjects exist → fall back to campus-wide (level=NULL) subjects
     - NEVER mix subjects from different levels
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         import os, requests as req_lib
@@ -2183,7 +2256,7 @@ class AvailableSubjectsView(APIView):
 
 class TeacherSubjectsDebugView(APIView):
     """Debug: return resolved teacher info and subject lists for the current user."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         try:
@@ -2272,7 +2345,7 @@ class OrgPerformanceDashboardView(APIView):
     per-branch block (class-wise pass rates, subject performance, monthly trend).
     Only APPROVED results are counted. Filter by academic_year + exam_type.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     CRITICAL_THRESHOLD = 60  # pass rate % below this = "critical" campus
     BEHAVIOUR_KEYWORDS = [
@@ -2528,7 +2601,7 @@ class PrincipalPerformanceDashboardView(OrgPerformanceDashboardView):
     INTER: how the principal's campus ranks against the network (aggregate only —
     no other campus's student-level detail). Approved results only.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         from django.db.models import Avg, Sum
@@ -2716,7 +2789,7 @@ class CoordinatorPerformanceDashboardView(OrgPerformanceDashboardView):
     campus baseline (NOT other campuses — a coordinator never sees the network).
     Approved results only.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def _subject_pass(self, qs):
         out = {}
@@ -2860,7 +2933,7 @@ class ClassTeacherPerformanceDashboardView(OrgPerformanceDashboardView):
     heatmap, subject performance. COMPARE: the class vs the campus baseline
     (Hidden — no other classes / campuses). Approved results only.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         from django.db.models import Avg, Sum, Q as _Q
@@ -3004,7 +3077,7 @@ class DonorPerformanceDashboardView(OrgPerformanceDashboardView):
     grade distribution. Approved results only. Filter by academic_year +
     exam_type (+ month for monthly).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     # Academic progression order; unknown levels fall to the end (alphabetical).
     LEVEL_ORDER = ['Pre-Primary', 'Pre Primary', 'Foundation', 'Primary',
@@ -3241,7 +3314,7 @@ class RegionalVarianceView(APIView):
       - grade         → narrow to one grade.
     Returns only subjects that exist on BOTH sides (a variance needs both).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         from result.services.regional_variance import subject_variance

@@ -13,4 +13,6 @@ Pillow
 pika
 pandas>=2.1.0
 django-phonenumber-field[phonenumbers]
+requests==2.32.3
+cryptography==42.0.5
 ams-shared @ file:///app/ams-shared

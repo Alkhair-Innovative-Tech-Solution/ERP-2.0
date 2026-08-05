@@ -285,6 +285,22 @@ class DualIsStudent(BasePermission):
 # tenant_id IS NULL (legacy-created, pre-migration) are included — same
 # permissive-for-unscoped-rows precedent as C1/C2.
 
+def teacher_assigned_coordinators(teacher):
+    """teacher.assigned_coordinators (a forward ManyToManyField to
+    Coordinator) uses Coordinator.objects — OrganizationManager-backed —
+    as its related manager's queryset under the hood, the same blind spot
+    as everywhere else in this module for a central-auth request (its
+    contextvars are never populated on that path, and there is no request
+    context at all in a manage.py shell either — confirmed while building
+    the C3 synthetic-data proof: a real through-table row existed but
+    `.all()`/`.exists()` on the relation still came back empty). Query the
+    through table directly instead, which isn't manager-filtered."""
+    through = teacher.assigned_coordinators.through
+    coordinator_ids = through._base_manager.filter(teacher_id=teacher.id).values_list('coordinator_id', flat=True)
+    from coordinator.models import Coordinator
+    return Coordinator._base_manager.filter(id__in=coordinator_ids)
+
+
 def central_tenant_qs(all_objects_manager, user):
     if not user.tenant_id:
         return all_objects_manager.none()

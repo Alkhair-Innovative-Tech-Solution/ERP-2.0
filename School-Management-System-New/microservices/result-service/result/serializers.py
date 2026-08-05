@@ -203,12 +203,42 @@ class ResultCreateSerializer(serializers.ModelSerializer):
             'teacher_remarks', 'exclude_subjects', 'is_absent',
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # `student`'s auto-derived PrimaryKeyRelatedField queryset defaults
+        # to Student.objects.all() — OrganizationManager-filtered, silently
+        # empty for a central-auth request (same blind spot as
+        # result/dual_auth.py's module docstring), which rejects every
+        # valid id with "object does not exist" on that path. FLAGGED:
+        # Student lives in student-service (out of scope to touch — no
+        # tenant_id column exists there yet, same residual gap as
+        # dual_auth.py's _find() for Teacher/Coordinator/Principal), so the
+        # central-auth swap below is the base manager, UNSCOPED by tenant —
+        # not the tenant-filtered pattern used for Result itself.
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser) and 'student' in self.fields:
+            self.fields['student'].queryset = Student._base_manager.filter(is_deleted=False)
+
     def validate(self, data):
         student = data.get('student')
         exam_type = data.get('exam_type')
 
         if exam_type == 'midterm':
-            if Result.objects.filter(student=student, exam_type='midterm', status='approved').exists():
+            # Result.objects is OrganizationManager-filtered — silently
+            # empty for a central-auth request (see result/dual_auth.py's
+            # module docstring), so this duplicate-check needs the same
+            # tenant-scoped base queryset views.py uses everywhere else.
+            from .dual_auth import central_tenant_qs
+            from central_auth.authentication import CentralAuthUser
+            request = self.context.get('request')
+            user = getattr(request, 'user', None)
+            if isinstance(user, CentralAuthUser):
+                base = central_tenant_qs(Result.all_objects.filter(is_deleted=False), user)
+            else:
+                base = Result.objects.all()
+            if base.filter(student=student, exam_type='midterm', status='approved').exists():
                 raise serializers.ValidationError(
                     "Approved Mid-term result already exists for this student."
                 )
@@ -222,17 +252,49 @@ class ResultCreateSerializer(serializers.ModelSerializer):
         exclude_subjects = validated_data.pop('exclude_subjects', []) or []
 
         user = self.context['request'].user
-        try:
-            teacher = Teacher.objects.get(email=user.email)
-        except Teacher.DoesNotExist:
-            raise serializers.ValidationError("Teacher profile not found")
+        from central_auth.authentication import CentralAuthUser
+        is_central = isinstance(user, CentralAuthUser)
 
-        if not teacher.assigned_coordinators.exists():
-            raise serializers.ValidationError("No coordinator assigned to this teacher")
+        # TeacherResultListView.perform_create already resolves+stamps
+        # `teacher` via serializer.save(teacher=..., ...) — reuse it rather
+        # than re-deriving from request.user.email below (ResultViewSet's
+        # generic create doesn't pass one, so this path still runs there).
+        teacher = validated_data.get('teacher')
+        if teacher is None:
+            if is_central:
+                from .dual_auth import find_teacher
+                teacher = find_teacher(user)
+            else:
+                try:
+                    teacher = Teacher.objects.get(email=user.email)
+                except Teacher.DoesNotExist:
+                    teacher = None
+            if teacher is None:
+                raise serializers.ValidationError("Teacher profile not found")
 
-        validated_data['teacher'] = teacher
-        if user.organization:
-            validated_data['organization'] = user.organization
+            if is_central:
+                from .dual_auth import teacher_assigned_coordinators
+                has_coordinator = teacher_assigned_coordinators(teacher).exists()
+            else:
+                has_coordinator = teacher.assigned_coordinators.exists()
+            if not has_coordinator:
+                raise serializers.ValidationError("No coordinator assigned to this teacher")
+
+            validated_data['teacher'] = teacher
+
+        if is_central:
+            # No local org_id/.organization on this token — tenant_id was
+            # already stamped by the view's serializer.save() kwargs (or is
+            # absent, e.g. ResultViewSet's generic create — flagged in
+            # docs/PHASE_C3_RESULT_SERVICE_RESULT.md, matching the same
+            # "not fully closed" precedent as C2's PaymentViewSet).
+            org_id = None
+            tenant_id = getattr(user, 'tenant_id', None)
+        else:
+            if user.organization:
+                validated_data['organization'] = user.organization
+            org_id = user.org_id
+            tenant_id = None
 
         result = Result.objects.create(**validated_data)
 
@@ -255,7 +317,8 @@ class ResultCreateSerializer(serializers.ModelSerializer):
                     SubjectMark.objects.create(
                         result=result,
                         subject_name=subj.name,
-                        organization_id=user.org_id
+                        organization_id=org_id,
+                        tenant_id=tenant_id,
                     )
             except Exception:
                 pass
@@ -263,7 +326,8 @@ class ResultCreateSerializer(serializers.ModelSerializer):
             for subject_data in subject_marks_data:
                 SubjectMark.objects.create(
                     result=result,
-                    organization_id=user.org_id,
+                    organization_id=org_id,
+                    tenant_id=tenant_id,
                     **subject_data
                 )
 
@@ -332,11 +396,22 @@ class ResultSubmitSerializer(serializers.ModelSerializer):
 
         teacher = instance.teacher
 
-        # All exam types (monthly, midterm, final) go to coordinator first
+        # All exam types (monthly, midterm, final) go to coordinator first.
+        # teacher.assigned_coordinators is Coordinator.objects-backed under
+        # the hood — blind spot for central-auth (see dual_auth.py's
+        # teacher_assigned_coordinators docstring).
+        from central_auth.authentication import CentralAuthUser
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if isinstance(user, CentralAuthUser):
+            from .dual_auth import teacher_assigned_coordinators
+            assigned = teacher_assigned_coordinators(teacher)
+        else:
+            assigned = teacher.assigned_coordinators
         if not instance.coordinator:
-            if not teacher.assigned_coordinators.exists():
+            if not assigned.exists():
                 raise serializers.ValidationError("No coordinator assigned to this teacher")
-            instance.coordinator = teacher.assigned_coordinators.first()
+            instance.coordinator = assigned.first()
 
         instance.status = 'pending_coordinator'
         instance.save()

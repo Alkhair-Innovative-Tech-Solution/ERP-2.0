@@ -3,6 +3,7 @@ from users.managers import OrganizationManager
 from django.utils.crypto import get_random_string
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from campus.models import CentralAuthFieldsMixin
 
 # Teacher model assumed in 'teachers' app
 TEACHER_MODEL = "teachers.Teacher"
@@ -15,7 +16,7 @@ SHIFT_CHOICES = [
 ]
 
 # ----------------------
-class Level(models.Model):
+class Level(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
     """
@@ -52,6 +53,16 @@ class Level(models.Model):
     assigned_coordinator_name = models.CharField(max_length=255, null=True, blank=True)
     assigned_coordinator_code = models.CharField(max_length=50, null=True, blank=True)
     coordinator_assigned_at = models.DateTimeField(null=True, blank=True)
+    # Phase C5: assigned_coordinator_id is a bare int (a staff-service
+    # Coordinator PK) — a CentralAuthUser/central identity's id is a UUID,
+    # can't go in a PositiveIntegerField. Separate nullable UUID column
+    # carries the central-auth identity instead. FLAGGED: assign_coordinator
+    # (classes/views.py) only accepts a bare int coordinator_id from the
+    # client payload today — no central UUID is supplied through this
+    # endpoint, so this column is schema-only/unpopulated in this phase
+    # (see docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md), same class of gap as
+    # C4's SubjectTeacherAssignmentCreateSerializer.teacher_id.
+    central_assigned_coordinator_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     def save(self, *args, **kwargs):
         # Detect name or campus change to update child grades
@@ -126,7 +137,7 @@ class Level(models.Model):
         return None
 
 # ----------------------
-class Grade(models.Model):
+class Grade(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
     """
@@ -268,7 +279,7 @@ class Grade(models.Model):
         return f"{self.name} - {shift_display} ({campus_name})"
 
 # ----------------------
-class ClassRoom(models.Model):
+class ClassRoom(CentralAuthFieldsMixin, models.Model):
     objects = OrganizationManager()
     all_objects = models.Manager()  # unfiltered — for signals/internal use
     """
@@ -298,9 +309,17 @@ class ClassRoom(models.Model):
         related_name='classroom_set',
         help_text="Class teacher for this classroom"
     )
+    # Phase C5: real FK to teachers.Teacher — a CentralAuthUser/central
+    # identity can't be assigned to it directly. FLAGGED: assign_teacher
+    # (classes/views.py) resolves the teacher via a bare int teacher_id from
+    # the client payload (Teacher.objects.get(id=teacher_id)), same as
+    # SubjectTeacherAssignment in C4 — no central UUID for THAT teacher is
+    # available through this endpoint, so this column is schema-only/
+    # unpopulated in this phase (see docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md).
+    central_class_teacher_id = models.UUIDField(null=True, blank=True, db_index=True)
     capacity = models.PositiveIntegerField(default=30)
     code = models.CharField(max_length=30, editable=False)
-    
+
     # Assignment tracking
     assigned_by = models.ForeignKey(
         'users.User',
@@ -310,6 +329,11 @@ class ClassRoom(models.Model):
         related_name='classroom_assignments_made',
         help_text="User who assigned the class teacher"
     )
+    # Phase C5: real FK to users.User — assigned_by IS request.user (the
+    # person making the assignment), so unlike class_teacher above, this one
+    # CAN be populated correctly on the central-auth path: the acting
+    # CentralAuthUser's own id.
+    central_assigned_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     assigned_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

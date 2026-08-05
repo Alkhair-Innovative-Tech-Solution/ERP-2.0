@@ -405,6 +405,8 @@ services:
       STAFF_DB_NAME: staff_db
       STAFF_DB_USER: staff_user
       STAFF_DB_PASSWORD: ${STAFF_DB_PASS:-staff_pass}
+      # Phase C5: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-campus:
         condition: service_healthy

@@ -2,7 +2,28 @@ from django.db import models
 from users.managers import OrganizationManager
 
 
-class Campus(models.Model):
+class CentralAuthFieldsMixin(models.Model):
+    """
+    Phase C5: additive, nullable fields for the central-auth repoint. Same
+    shape as C1-C4 — dual-run, the existing `organization` FK and
+    OrganizationManager-based `objects` manager on each model are untouched;
+    these are new, parallel fields used only by the central-auth code path
+    (see campus_service/dual_auth.py, campus/views.py, classes/views.py).
+
+    tenant_id:       stamped from the verified token's tenant_id claim on
+                      create, used to scope reads for central-auth requests.
+    central_org_id:   maps this row's local `users.Organization` to its
+                      central-auth Organization equivalent. Nullable,
+                      backfillable — synthetic-only for now.
+    """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        abstract = True
+
+
+class Campus(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
     STATUS_CHOICES = [

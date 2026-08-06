@@ -227,6 +227,16 @@ def teacher_assigned_coordinators(teacher):
     return Coordinator._base_manager.filter(id__in=coordinator_ids)
 
 
+def central_person_id(user):
+    """The value to stamp into a central_*_id UUID column for the acting
+    user's own identity. None for a legacy token. (No legacy_person_id
+    counterpart is needed here, unlike C4/C5 — support-service's person
+    fields are real FKs to Teacher/Coordinator/Principal instances, always
+    resolved via find_teacher/find_coordinator/find_principal and assigned
+    as the model instance itself, never as request.user directly.)"""
+    return user.id if isinstance(user, CentralAuthUser) else None
+
+
 def get_org_and_tenant(user):
     """Returns (organization_instance_or_None, tenant_id_or_None). Legacy:
     resolves/creates the local Organization from user.org_id (mirrors every

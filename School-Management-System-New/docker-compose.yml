@@ -650,6 +650,8 @@ services:
       REDIS_URL: redis://redis:6379/9
       STUDENT_SERVICE_URL: http://student-service:8005
       CAMPUS_SERVICE_URL: http://campus-service:8003
+      # Phase C9: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       STAFF_DB_HOST: postgres-staff
       STAFF_DB_NAME: staff_db
       STAFF_DB_USER: staff_user

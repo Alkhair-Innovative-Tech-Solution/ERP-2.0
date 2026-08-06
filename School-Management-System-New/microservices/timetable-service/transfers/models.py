@@ -2,13 +2,23 @@ from django.db import models
 from users.managers import OrganizationManager
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from timetable.models import CentralAuthFieldsMixin
 
 User = get_user_model()
 
 
-class TransferRequest(models.Model):
+class TransferRequest(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C9: schema-only for this phase — `transfers/views.py` (~3900
+    # lines of function-based views, exclusively IsAuthenticated-gated) is
+    # NOT made dual-safe here (out of scope per this phase's Goal/Done/Test
+    # criteria, which only cover `timetable/` app's endpoints) — flagged in
+    # docs/PHASE_C9_TIMETABLE_SERVICE_RESULT.md as a residual gap for a
+    # future dedicated phase. `all_objects` added anyway (same C5-class
+    # hazard as every other model in this service) since it costs nothing
+    # and unblocks that future phase.
+    all_objects = models.Manager()
     """
     Principal-to-principal campus/shift transfer that triggers ID changes.
     Kept as-is for backward compatibility and campus-level transfers.
@@ -128,9 +138,11 @@ class TransferRequest(models.Model):
         return 'Unknown'
 
 
-class IDHistory(models.Model):
+class IDHistory(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C9: schema-only, see TransferRequest's comment above.
+    all_objects = models.Manager()
     ENTITY_TYPES = [
         ('student', 'Student'),
         ('teacher', 'Teacher'),
@@ -211,9 +223,11 @@ class IDHistory(models.Model):
         return 'Unknown'
 
 
-class ClassTransfer(models.Model):
+class ClassTransfer(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C9: schema-only, see TransferRequest's comment above.
+    all_objects = models.Manager()
     """
     Class/section transfer within the same campus and shift.
     Does NOT change the student's ID – only classroom/section assignment.
@@ -306,9 +320,11 @@ class ClassTransfer(models.Model):
         return f"Class transfer for {self.student.name} ({self.status})"
 
 
-class ShiftTransfer(models.Model):
+class ShiftTransfer(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C9: schema-only, see TransferRequest's comment above.
+    all_objects = models.Manager()
     """
     Shift transfer within the same campus.
     This may later link to a TransferRequest to actually change the ID.
@@ -483,9 +499,11 @@ class TransferApproval(models.Model):
         return f"{self.transfer_type}#{self.transfer_id} - {self.role} ({self.status})"
 
 
-class GradeSkipTransfer(models.Model):
+class GradeSkipTransfer(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C9: schema-only, see TransferRequest's comment above.
+    all_objects = models.Manager()
     """
     Grade skipping transfer - allows students to skip exactly 1 grade (e.g., Grade 1 → Grade 3).
     Shift and section changes are optional.
@@ -646,9 +664,11 @@ class GradeSkipTransfer(models.Model):
         return f"Grade skip for {self.student.name} ({from_grade_display} → {to_grade_display})"
 
 
-class CampusTransfer(models.Model):
+class CampusTransfer(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C9: schema-only, see TransferRequest's comment above.
+    all_objects = models.Manager()
     """
     Teacher-initiated campus transfer workflow for students.
     Handles:

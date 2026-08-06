@@ -17,6 +17,7 @@ whitenoise
 Pillow
 pika
 requests
+cryptography==42.0.5  # needed for central_auth/jwks.py's RSA key parsing
 pandas>=2.1.0
 openpyxl>=3.1.0
 django-phonenumber-field[phonenumbers]

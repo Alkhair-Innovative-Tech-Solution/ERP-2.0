@@ -307,7 +307,7 @@ def _stamp_central_actor(instance, user, field_name):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def mark_attendance(request):
     """
     Mark attendance for a class on a specific date
@@ -583,7 +583,7 @@ def mark_attendance(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def mark_bulk_attendance(request):
     """
     Mark attendance for entire class with simple present/absent status
@@ -907,14 +907,20 @@ def get_class_attendance(request, classroom_id):
     """
     Get attendance records for a specific class
     """
-    classroom = get_object_or_404(ClassRoom, id=classroom_id)
+    user = request.user
+    is_central = isinstance(user, CentralAuthUser)
+    classroom = _resolve_classroom_for_user(classroom_id, user)
+    # Phase C10: Attendance.objects is OrganizationManager-backed (blind
+    # for central-auth) — central_tenant_qs on all_objects instead. Legacy
+    # path unchanged.
+    attendance_qs = central_tenant_qs(Attendance.all_objects, user) if is_central else Attendance.objects
     date_param = request.GET.get('date')
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    
+
     if date_param:
         # Get attendance for specific date
-        attendance = Attendance.objects.filter(
+        attendance = attendance_qs.filter(
             classroom=classroom,
             date=date_param
         ).prefetch_related('student_attendances__student').first()
@@ -925,21 +931,21 @@ def get_class_attendance(request, classroom_id):
             return Response({'message': 'No attendance found for this date'})
     elif start_date or end_date:
         # Get attendance for date range
-        attendance_records = Attendance.objects.filter(
+        attendance_records = attendance_qs.filter(
             classroom=classroom
         ).prefetch_related('student_attendances__student')
-        
+
         if start_date:
             attendance_records = attendance_records.filter(date__gte=start_date)
         if end_date:
             attendance_records = attendance_records.filter(date__lte=end_date)
-            
+
         attendance_records = attendance_records.order_by('-date')
         serializer = AttendanceSerializer(attendance_records, many=True, context={'request': request})
         return Response(serializer.data)
     else:
         # Get all attendance records for the class
-        attendance_records = Attendance.objects.filter(
+        attendance_records = attendance_qs.filter(
             classroom=classroom
         ).prefetch_related('student_attendances__student').order_by('-date')
         serializer = AttendanceSerializer(attendance_records, many=True, context={'request': request})
@@ -952,11 +958,17 @@ def get_student_attendance(request, student_id):
     """
     Get attendance history for a specific student
     """
-    student = get_object_or_404(Student, id=student_id)
+    user = request.user
+    is_central = isinstance(user, CentralAuthUser)
+    if is_central:
+        student = get_object_or_404(_student_manager_for_user(user), id=student_id)
+    else:
+        student = get_object_or_404(Student, id=student_id)
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    
-    attendance_records = StudentAttendance.objects.filter(
+
+    sa_qs = central_tenant_qs(StudentAttendance.all_objects, user) if is_central else StudentAttendance.objects
+    attendance_records = sa_qs.filter(
         student=student
     ).select_related('attendance')
     
@@ -979,11 +991,28 @@ def get_class_students(request, classroom_id):
     """
     Get all students in a specific classroom
     """
-    classroom = get_object_or_404(ClassRoom, id=classroom_id)
-    
-    # Check permissions - teacher can only see their assigned classes (supports multiple)
     user = request.user
-    if user.is_teacher():
+    is_central = isinstance(user, CentralAuthUser)
+    classroom = _resolve_classroom_for_user(classroom_id, user)
+
+    # Check permissions - teacher can only see their assigned classes (supports multiple)
+    if is_central:
+        # user.is_teacher()/.username don't exist on CentralAuthUser —
+        # resolve via find_teacher instead. Non-teacher central callers
+        # (coordinator/principal/superadmin) fall through unchecked, same
+        # as the legacy branch below (which only gates the teacher tier).
+        teacher = _central_find_teacher(user)
+        if teacher:
+            allowed = False
+            if teacher.assigned_classroom == classroom:
+                allowed = True
+            elif teacher.assigned_classrooms.filter(id=classroom.id).exists():
+                allowed = True
+            elif getattr(classroom, 'class_teacher_id', None) == teacher.id:
+                allowed = True
+            if not allowed:
+                return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+    elif user.is_teacher():
         try:
             # Find teacher by employee code (username)
             from teachers.models import Teacher
@@ -1003,10 +1032,11 @@ def get_class_students(request, classroom_id):
             classroom_org_id = getattr(getattr(classroom, 'organization', None), 'pk', None)
             if org_id and classroom_org_id and org_id != classroom_org_id:
                 return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-    
+
     # Filter students: only non-deleted students should appear in attendance
     # Removed is_active filter to match student list view - all non-deleted students should be visible
-    students = Student.objects.filter(classroom=classroom, is_deleted=False).order_by('name')
+    student_manager = _student_manager_for_user(user)
+    students = student_manager.filter(classroom=classroom, is_deleted=False).order_by('name')
     
     student_data = []
     for student in students:
@@ -1031,16 +1061,19 @@ def get_attendance_summary(request, classroom_id):
     """
     Get attendance summary for a classroom
     """
-    classroom = get_object_or_404(ClassRoom, id=classroom_id)
+    user = request.user
+    is_central = isinstance(user, CentralAuthUser)
+    classroom = _resolve_classroom_for_user(classroom_id, user)
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    
+
     if not start_date:
         start_date = (timezone.now().date() - timedelta(days=30))
     if not end_date:
         end_date = timezone.now().date()
-    
-    attendance_records = Attendance.objects.filter(
+
+    attendance_qs = central_tenant_qs(Attendance.all_objects, user) if is_central else Attendance.objects
+    attendance_records = attendance_qs.filter(
         classroom=classroom,
         date__range=[start_date, end_date]
     ).order_by('-date')
@@ -1072,19 +1105,28 @@ def get_teacher_classes(request):
     """
     try:
         user = request.user
-        
-        # Find teacher by employee code (username) since there's no direct relationship
-        from teachers.models import Teacher
-        try:
-            teacher = Teacher.objects.get(employee_code=user.username)
-        except Teacher.DoesNotExist:
-            return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        if not teacher:
-            return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # Get classes where teacher is class teacher
-        classrooms = ClassRoom.objects.filter(class_teacher=teacher)
+        is_central = isinstance(user, CentralAuthUser)
+
+        if is_central:
+            # user.username doesn't exist on CentralAuthUser — find_teacher
+            # resolves via the local email/employee_code DB match instead.
+            teacher = _central_find_teacher(user)
+            if not teacher:
+                return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
+            classrooms = central_tenant_qs(ClassRoom.all_objects, user).filter(class_teacher=teacher)
+        else:
+            # Find teacher by employee code (username) since there's no direct relationship
+            from teachers.models import Teacher
+            try:
+                teacher = Teacher.objects.get(employee_code=user.username)
+            except Teacher.DoesNotExist:
+                return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            if not teacher:
+                return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Get classes where teacher is class teacher
+            classrooms = ClassRoom.objects.filter(class_teacher=teacher)
         
         class_data = []
         for classroom in classrooms:
@@ -1105,7 +1147,7 @@ def get_teacher_classes(request):
 
 
 @api_view(['PUT'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def edit_attendance(request, attendance_id):
     """
     Edit existing attendance record
@@ -1633,15 +1675,27 @@ def get_coordinator_classes(request):
     """
     try:
         user = request.user
-        
-        if not user.is_coordinator():
-            return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Find coordinator by user (robust lookup — local attendance_db first, then staff_db fallback)
-        from coordinator.models import Coordinator
-        from classes.models import Level
-        coordinator = _resolve_coordinator(user)
+        is_central = isinstance(user, CentralAuthUser)
 
+        # user.is_coordinator() doesn't exist on CentralAuthUser — resolve
+        # via find_coordinator (local DB match) instead; the staff_db raw-SQL
+        # fallback below is a legacy-only path (keyed on username/email
+        # claims shaped for the legacy token) and is skipped entirely for a
+        # central-auth caller (coordinator is either resolved via
+        # find_coordinator above, or this request 404s — never falls
+        # through to the legacy fallback's differently-shaped lookup).
+        if is_central:
+            coordinator = _central_find_coordinator(user)
+            if not coordinator:
+                return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            if not user.is_coordinator():
+                return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            # Find coordinator by user (robust lookup — local attendance_db first, then staff_db fallback)
+            from coordinator.models import Coordinator
+            coordinator = _resolve_coordinator(user)
+
+        from classes.models import Level
         managed_levels = []
 
         if coordinator and coordinator.is_currently_active:
@@ -1649,6 +1703,8 @@ def get_coordinator_classes(request):
                 managed_levels = list(coordinator.assigned_levels.all())
             elif coordinator.level:
                 managed_levels = [coordinator.level]
+        elif is_central:
+            pass
         else:
             # Coordinator not in attendance_db — query staff_db directly
             try:
@@ -1705,8 +1761,9 @@ def get_coordinator_classes(request):
 
         if not managed_levels:
             return Response({'error': 'No level assigned to coordinator'}, status=status.HTTP_404_NOT_FOUND)
-        
-        classrooms = ClassRoom.objects.filter(
+
+        classroom_qs = central_tenant_qs(ClassRoom.all_objects, user) if is_central else ClassRoom.objects
+        classrooms = classroom_qs.filter(
             grade__level__in=managed_levels
         ).select_related('grade', 'class_teacher', 'grade__level__campus')
         
@@ -1900,28 +1957,50 @@ def get_level_attendance_summary(request, level_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def submit_attendance(request, attendance_id):
     """Teacher submits draft attendance for review"""
     try:
-        attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
-        
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
+        if is_central:
+            attendance = get_object_or_404(
+                central_tenant_qs(Attendance.all_objects, user), id=attendance_id, is_deleted=False
+            )
+        else:
+            attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
+
         # Verify teacher can submit
         if attendance.status != 'draft':
             return Response({'error': 'Can only submit draft attendance'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Verify user is teacher of this class
-        teacher = Teacher.objects.get(employee_code=request.user.username)
-        if teacher.assigned_classroom != attendance.classroom:
+
+        # Verify user is teacher of this class. `request.user.username`
+        # doesn't exist on CentralAuthUser (this line previously had no
+        # guard at all — would AttributeError unconditionally for any
+        # central-auth caller).
+        if is_central:
+            teacher = _central_find_teacher(user)
+        else:
+            teacher = Teacher.objects.get(employee_code=user.username)
+        if not teacher or teacher.assigned_classroom != attendance.classroom:
             return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         with transaction.atomic():
             attendance.status = 'submitted'
             attendance.submitted_at = timezone.now()
-            attendance.submitted_by = request.user
-            attendance.add_edit_history(request.user, 'submitted', 'Submitted for coordinator review')
+            # Phase C10 bug fix (pre-existing, affects legacy too): this was
+            # a bare `request.user` assignment to a `users.User` FK — for
+            # EITHER token type, request.user is never a real Model
+            # instance (_TokenUser or CentralAuthUser), so Django's FK
+            # descriptor raises ValueError on assignment, unconditionally —
+            # this endpoint 400'd for every legacy caller too, before this
+            # fix. _db_user() resolves the real DB row (legacy) or safely
+            # returns None (central-auth, no local row exists).
+            attendance.submitted_by = _db_user(user)
+            _stamp_central_actor(attendance, user, 'central_submitted_by_id')
+            attendance.add_edit_history(user, 'submitted', 'Submitted for coordinator review')
             attendance.save()
-            
+
             # Create audit log
             from .models import AuditLog
             AuditLog.objects.create(
@@ -1929,30 +2008,46 @@ def submit_attendance(request, attendance_id):
                 action='submit',
                 entity_type='Attendance',
                 entity_id=attendance.id,
-                user=_db_user(request.user),
+                user=_db_user(user),
                 ip_address=request.META.get('REMOTE_ADDR'),
                 changes={'status': 'submitted'},
                 reason='Submitted for coordinator review'
             )
-        
+
         return Response({'message': 'Attendance submitted successfully'})
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def review_attendance(request, attendance_id):
     """Coordinator moves attendance to under_review"""
     try:
-        attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
-        
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
+        if is_central:
+            attendance = get_object_or_404(
+                central_tenant_qs(Attendance.all_objects, user), id=attendance_id, is_deleted=False
+            )
+        else:
+            attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
+
         if attendance.status != 'submitted':
             return Response({'error': 'Can only review submitted attendance'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Verify coordinator has access
-        from coordinator.models import Coordinator
-        coordinator = _resolve_coordinator(request.user)
+
+        # Verify coordinator has access. Central: find_coordinator (local
+        # DB match via _base_manager, C3/C6/C8/C9 pattern) instead of
+        # _resolve_coordinator (Coordinator.get_for_user reads
+        # user.username, which doesn't exist on CentralAuthUser, then
+        # OrganizationManager-blind staff_db fallback — both fail closed to
+        # None already, but find_coordinator is the correct resolution
+        # path, not just a safe no-crash fallback).
+        if is_central:
+            coordinator = _central_find_coordinator(user)
+        else:
+            from coordinator.models import Coordinator
+            coordinator = _resolve_coordinator(user)
         if not coordinator or not coordinator.is_currently_active:
             return Response({'error': 'Coordinator profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1971,42 +2066,57 @@ def review_attendance(request, attendance_id):
 
         if not allowed:
             return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         with transaction.atomic():
             attendance.status = 'under_review'
             attendance.reviewed_at = timezone.now()
-            attendance.reviewed_by = request.user
-            attendance.add_edit_history(request.user, 'review', 'Under coordinator review')
+            # Phase C10 bug fix (pre-existing, affects legacy too) — see
+            # submit_attendance's identical fix above for the full
+            # explanation (bare `request.user` -> a `users.User` FK always
+            # raised ValueError on assignment).
+            attendance.reviewed_by = _db_user(user)
+            _stamp_central_actor(attendance, user, 'central_reviewed_by_id')
+            attendance.add_edit_history(user, 'review', 'Under coordinator review')
             attendance.save()
-            
+
             from .models import AuditLog
             AuditLog.objects.create(
                 feature='attendance',
                 action='review',
                 entity_type='Attendance',
                 entity_id=attendance.id,
-                user=_db_user(request.user),
+                user=_db_user(user),
                 ip_address=request.META.get('REMOTE_ADDR'),
                 changes={'status': 'under_review'}
             )
-        
+
         return Response({'message': 'Attendance moved to under review'})
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def finalize_attendance(request, attendance_id):
     """Coordinator finalizes attendance (locks it)"""
     try:
-        attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
-        
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
+        if is_central:
+            attendance = get_object_or_404(
+                central_tenant_qs(Attendance.all_objects, user), id=attendance_id, is_deleted=False
+            )
+        else:
+            attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
+
         if attendance.status not in ['draft', 'submitted', 'under_review']:
             return Response({'error': 'Can only finalize draft, submitted, or under_review attendance'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        from coordinator.models import Coordinator
-        coordinator = _resolve_coordinator(request.user)
+
+        if is_central:
+            coordinator = _central_find_coordinator(user)
+        else:
+            from coordinator.models import Coordinator
+            coordinator = _resolve_coordinator(user)
         if not coordinator or not coordinator.is_currently_active:
             return Response({'error': 'Coordinator profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -2025,13 +2135,14 @@ def finalize_attendance(request, attendance_id):
 
         if not allowed:
             return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         with transaction.atomic():
             attendance.status = 'approved'
             attendance.is_final = True
             attendance.finalized_at = timezone.now()
-            attendance.finalized_by = _db_user(request.user)
-            attendance.add_edit_history(request.user, 'finalize', 'Finalized by coordinator')
+            attendance.finalized_by = _db_user(user)
+            _stamp_central_actor(attendance, user, 'central_finalized_by_id')
+            attendance.add_edit_history(user, 'finalize', 'Finalized by coordinator')
             attendance.save()
 
             from .models import AuditLog
@@ -2040,30 +2151,40 @@ def finalize_attendance(request, attendance_id):
                 action='finalize',
                 entity_type='Attendance',
                 entity_id=attendance.id,
-                user=_db_user(request.user),
+                user=_db_user(user),
                 ip_address=request.META.get('REMOTE_ADDR'),
                 changes={'status': 'approved'}
             )
-        
+
         return Response({'message': 'Attendance finalized successfully'})
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def coordinator_approve_attendance(request, attendance_id):
     """Coordinator directly approves attendance (bypasses review step)"""
     try:
-        attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
-        
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
+        if is_central:
+            attendance = get_object_or_404(
+                central_tenant_qs(Attendance.all_objects, user), id=attendance_id, is_deleted=False
+            )
+        else:
+            attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
+
         # Check if attendance can be approved (draft, submitted, or under_review)
         if attendance.status not in ['draft', 'submitted', 'under_review']:
             return Response({'error': 'Can only approve draft, submitted or under review attendance'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Verify coordinator has access
-        from coordinator.models import Coordinator
-        coordinator = _resolve_coordinator(request.user)
+        if is_central:
+            coordinator = _central_find_coordinator(user)
+        else:
+            from coordinator.models import Coordinator
+            coordinator = _resolve_coordinator(user)
         if not coordinator:
             return Response({'error': 'Coordinator profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -2078,14 +2199,15 @@ def coordinator_approve_attendance(request, attendance_id):
 
         if not allowed:
             return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         with transaction.atomic():
             # Move directly to approved status
             attendance.status = 'approved'
             attendance.is_final = True
             attendance.finalized_at = timezone.now()
-            attendance.finalized_by = _db_user(request.user)
-            attendance.add_edit_history(request.user, 'coordinator_approve', 'Directly approved by coordinator')
+            attendance.finalized_by = _db_user(user)
+            _stamp_central_actor(attendance, user, 'central_finalized_by_id')
+            attendance.add_edit_history(user, 'coordinator_approve', 'Directly approved by coordinator')
             attendance.save()
 
             from .models import AuditLog
@@ -2094,7 +2216,7 @@ def coordinator_approve_attendance(request, attendance_id):
                 action='approve',
                 entity_type='Attendance',
                 entity_id=attendance.id,
-                user=_db_user(request.user),
+                user=_db_user(user),
                 # organization is required for the log to be visible: AuditLog
                 # uses OrganizationManager, so a null org is invisible to every
                 # org-scoped viewer (org-admin, principal).
@@ -2160,30 +2282,47 @@ def coordinator_approve_attendance(request, attendance_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def coordinator_bulk_approve_attendance(request):
     """Coordinator bulk approves multiple attendances at once"""
     try:
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
         attendance_ids = request.data.get('attendance_ids', [])
         comment = request.data.get('comment', '')
-        
+
         if not attendance_ids or not isinstance(attendance_ids, list):
             return Response({'error': 'attendance_ids must be a non-empty list'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Verify coordinator has access
-        from coordinator.models import Coordinator
-        coordinator = _resolve_coordinator(request.user)
+        if is_central:
+            coordinator = _central_find_coordinator(user)
+        else:
+            from coordinator.models import Coordinator
+            coordinator = _resolve_coordinator(user)
         if not coordinator:
             return Response({'error': 'Coordinator profile not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+
         approved_count = 0
         failed_count = 0
         errors = []
-        
+
         for attendance_id in attendance_ids:
             try:
                 with transaction.atomic():
                     attendance = Attendance._base_manager.get(id=attendance_id, is_deleted=False)
+
+                    # Phase C10 cross-tenant isolation: `_base_manager` is
+                    # unfiltered by design (an intentional org-independent
+                    # lookup, unlike `.objects`) — for a central-auth
+                    # caller this must still never cross a tenant boundary.
+                    # Rows with tenant_id IS NULL (legacy-created,
+                    # pre-migration) are treated permissively, same
+                    # precedent as central_tenant_qs everywhere else.
+                    if is_central and attendance.tenant_id and str(attendance.tenant_id) != str(user.tenant_id):
+                        failed_count += 1
+                        errors.append(f"Attendance {attendance_id}: not found")
+                        continue
 
                     # Check if attendance can be approved
                     if attendance.status not in ['draft', 'submitted', 'under_review']:
@@ -2215,10 +2354,11 @@ def coordinator_bulk_approve_attendance(request):
                     attendance.status = 'approved'
                     attendance.is_final = True
                     attendance.finalized_at = timezone.now()
-                    attendance.finalized_by = _db_user(request.user)
-                    attendance.add_edit_history(request.user, 'coordinator_approve', f'Bulk approved by coordinator{": " + comment if comment else ""}')
+                    attendance.finalized_by = _db_user(user)
+                    _stamp_central_actor(attendance, user, 'central_finalized_by_id')
+                    attendance.add_edit_history(user, 'coordinator_approve', f'Bulk approved by coordinator{": " + comment if comment else ""}')
                     attendance.save()
-                    
+
                     # Create audit log
                     from .models import AuditLog
                     AuditLog.objects.create(
@@ -2226,7 +2366,7 @@ def coordinator_bulk_approve_attendance(request):
                         action='approve',
                         entity_type='Attendance',
                         entity_id=attendance.id,
-                        user=_db_user(request.user),
+                        user=_db_user(user),
                         organization=attendance.organization,
                         ip_address=request.META.get('REMOTE_ADDR'),
                         changes={'status': 'approved', 'bulk_approval': True}
@@ -2289,21 +2429,31 @@ def coordinator_bulk_approve_attendance(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, DualServiceSubscribed])
 def reopen_attendance(request, attendance_id):
     """Coordinator reopens finalized attendance with reason"""
     try:
-        attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
+        if is_central:
+            attendance = get_object_or_404(
+                central_tenant_qs(Attendance.all_objects, user), id=attendance_id, is_deleted=False
+            )
+        else:
+            attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
         reason = request.data.get('reason')
-        
+
         if not reason:
             return Response({'error': 'Reason is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         if attendance.status != 'approved':
             return Response({'error': 'Can only reopen approved attendance'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        from coordinator.models import Coordinator
-        coordinator = _resolve_coordinator(request.user)
+
+        if is_central:
+            coordinator = _central_find_coordinator(user)
+        else:
+            from coordinator.models import Coordinator
+            coordinator = _resolve_coordinator(user)
         if not coordinator:
             return Response({'error': 'Coordinator profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -2318,23 +2468,26 @@ def reopen_attendance(request, attendance_id):
 
         if not allowed:
             return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         with transaction.atomic():
             attendance.status = 'under_review'
             attendance.is_final = False
             attendance.reopened_at = timezone.now()
-            attendance.reopened_by = request.user
+            # Phase C10 bug fix (pre-existing, affects legacy too) — see
+            # submit_attendance's identical fix above.
+            attendance.reopened_by = _db_user(user)
+            _stamp_central_actor(attendance, user, 'central_reopened_by_id')
             attendance.reopen_reason = reason
-            attendance.add_edit_history(request.user, 'reopen', reason)
+            attendance.add_edit_history(user, 'reopen', reason)
             attendance.save()
-            
+
             from .models import AuditLog
             AuditLog.objects.create(
                 feature='attendance',
                 action='reopen',
                 entity_type='Attendance',
                 entity_id=attendance.id,
-                user=_db_user(request.user),
+                user=_db_user(user),
                 ip_address=request.META.get('REMOTE_ADDR'),
                 changes={'status': 'under_review'},
                 reason=reason

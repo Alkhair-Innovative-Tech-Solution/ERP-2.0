@@ -300,22 +300,43 @@ class AttendanceSerializer(serializers.ModelSerializer):
         if not request or not hasattr(request, 'user'):
             # Default to showing actual status if no user context
             return obj.status
-        
+
         user = request.user
-        
+
+        # Phase C10: user.is_teacher()/.is_coordinator()/.is_principal()
+        # don't exist on CentralAuthUser (AttributeError, not "returns
+        # False") and .is_superadmin is a bool ATTRIBUTE there, not a
+        # method (`user.is_superadmin()` -> TypeError: 'bool' object is not
+        # callable) — this crashed AttendanceSerializer for EVERY
+        # central-auth read before this fix (get_class_attendance,
+        # edit_attendance's response, etc.). Central: resolve the same
+        # tiers via the local-DB-match helpers (find_teacher/
+        # find_coordinator/find_principal), same technique used throughout
+        # attendance/views.py's dual_auth-based workflow functions.
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            from attendance_service.dual_auth import find_teacher, find_coordinator, find_principal
+            is_teacher = bool(find_teacher(user)) and not user.is_superadmin
+            is_coordinator_or_above = bool(
+                user.is_superadmin or find_coordinator(user) or find_principal(user)
+            )
+        else:
+            is_teacher = user.is_teacher()
+            is_coordinator_or_above = user.is_coordinator() or user.is_principal() or user.is_superadmin()
+
         # Map status to display labels based on user role
         if obj.status == 'approved':
             return 'Approved'
         elif obj.status == 'under_review':
-            if user.is_teacher():
+            if is_teacher:
                 return 'Marked (Under Review)'
-            elif user.is_coordinator() or user.is_principal() or user.is_superadmin():
+            elif is_coordinator_or_above:
                 return 'Marked'
             else:
                 return 'Under Review'
         elif obj.status == 'submitted':
             # Legacy support
-            if user.is_teacher():
+            if is_teacher:
                 return 'Submitted'
             else:
                 return 'Marked'

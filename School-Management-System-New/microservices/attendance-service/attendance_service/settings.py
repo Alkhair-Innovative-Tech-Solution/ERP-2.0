@@ -70,7 +70,11 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["ams_shared.jwt.validator.ServiceJWTAuthentication"],
+    # Phase C10: DualAuthentication routes RS256 (central-auth) tokens to
+    # CentralAuthAuthentication (local JWKS verify) and HS256 (legacy)
+    # tokens to the original ServiceJWTAuthentication — same dual-run shape
+    # as C1-C9.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["attendance_service.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -111,6 +115,9 @@ RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 
 STAFF_SERVICE_URL = os.getenv("STAFF_SERVICE_URL", "http://staff-service:8004")
 STUDENT_SERVICE_URL = os.getenv("STUDENT_SERVICE_URL", "http://student-service:8005")
+
+# Phase C10: central auth JWKS verification (central_auth/jwks.py).
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://host.docker.internal:8000")
 
 # --- FoxFace (Foxit hosted face-recognition platform) -------------------------
 # Used by `manage.py sync_foxface_logs` to pull user logs into StaffAttendance.

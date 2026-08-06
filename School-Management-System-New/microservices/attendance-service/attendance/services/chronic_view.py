@@ -18,7 +18,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from attendance.models import StudentAttendance
-from attendance.permissions import HasAttendanceViewPermission
+# Phase C10: dual-safe wrapper — see review_view.py's identical import for
+# the full explanation.
+from attendance_service.dual_auth import DualHasAttendanceViewPermission as HasAttendanceViewPermission
 from attendance.services.metrics import attendance_percentage
 from attendance.services.review_view import (
     _error, _parse_date_range, _scoped_classroom_qs, ReviewParamError,

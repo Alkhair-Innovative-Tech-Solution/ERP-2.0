@@ -17,7 +17,9 @@ from rest_framework.response import Response
 
 from datetime import date
 
-from attendance.permissions import HasAttendanceViewPermission
+# Phase C10: dual-safe wrapper — see review_view.py's identical import for
+# the full explanation.
+from attendance_service.dual_auth import DualHasAttendanceViewPermission as HasAttendanceViewPermission
 from attendance.services import calendar_utils
 from attendance.services.review_view import (
     _classroom_in_scope, _error, _missing_days, _parse_date_range, ReviewParamError,

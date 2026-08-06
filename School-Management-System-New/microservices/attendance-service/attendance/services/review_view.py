@@ -23,7 +23,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from attendance.models import Attendance, StudentAttendance, Holiday
-from attendance.permissions import HasAttendanceViewPermission
+# Phase C10: dual-safe wrapper — legacy behavior (the RolePermission-table
+# `view_attendance` toggle) delegates unchanged; central-auth resolves via
+# local-DB role match (find_teacher/find_coordinator/find_principal) since
+# no sms.attendance.* catalog permission exists to check instead. Imported
+# under the original name so every `HasAttendanceViewPermission` reference
+# below (including the docstring at line ~742) stays valid without a
+# call-site-by-call-site rewrite.
+from attendance_service.dual_auth import DualHasAttendanceViewPermission as HasAttendanceViewPermission
 from attendance.services import calendar_utils
 from attendance.services.metrics import attendance_percentage, percentage_from_statuses
 from attendance.services.scope_resolver import resolve_scope

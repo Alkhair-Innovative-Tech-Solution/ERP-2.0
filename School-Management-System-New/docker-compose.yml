@@ -535,6 +535,8 @@ services:
       AUTH_DB_NAME: auth_db
       AUTH_DB_USER: auth_user
       AUTH_DB_PASSWORD: ${AUTH_DB_PASS:-auth_pass}
+      # Phase C10: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-attendance:
         condition: service_healthy

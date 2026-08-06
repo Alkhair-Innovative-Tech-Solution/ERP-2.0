@@ -14,3 +14,7 @@ pika
 pandas>=2.1.0
 django-phonenumber-field[phonenumbers]
 ams-shared @ file:///app/ams-shared
+# Phase C9: central_auth/jwks.py needs requests (JWKS HTTP fetch — no local
+# app collision here, confirmed) and cryptography (RSA key parsing).
+requests>=2.31.0
+cryptography==42.0.5

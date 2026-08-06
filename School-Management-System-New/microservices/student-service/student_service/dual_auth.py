@@ -118,11 +118,37 @@ def _find(model, user):
     """FLAGGED: `._base_manager` is NOT tenant-scoped. Teacher/Coordinator/
     Principal live in staff-service (out of scope to touch from a
     student-service-scoped phase — no tenant_id column exists there yet),
-    same residual gap flagged in C3/C4/C6's dual_auth.py."""
+    same residual gap flagged in C3/C4/C6's dual_auth.py.
+
+    Bug found live in this phase's own proof testing (C3/C6 never hit it,
+    since they never had a non-staff CentralAuthUser to test against): a
+    NonStaffIdentity-minted token (a student) has NEITHER `employee_code`
+    NOR `email` claims set — CentralAuthUser defaults both to `''`. Without
+    a guard, `Q(email='') | Q(employee_code='')` can FALSE-POSITIVE match
+    any Teacher/Coordinator/Principal row with a blank email/employee_code
+    (e.g. leftover seed data), silently misidentifying a student token as
+    staff. Guard: only query at all if the token is staff-shaped — a
+    NonStaffIdentity-minted token never carries an `employee_id` claim
+    (see `generate_access_token`'s `hasattr(user, 'employee_code')` branch
+    on the auth-service side), so `employee_id` is unset/empty for every
+    student token, same distinguishing signal C6 used in
+    `user_is_staff_principal`."""
+    if isinstance(user, CentralAuthUser) and not user.employee_id:
+        return None
     manager = model._base_manager if isinstance(user, CentralAuthUser) else model.objects
-    return manager.filter(
-        Q(email=user.email) | Q(employee_code=user_identifier(user))
-    ).first()
+    email = user.email or None
+    employee_code = user_identifier(user) or None
+    if not email and not employee_code:
+        return None
+    # Only include a clause for a field that actually has a value — an
+    # empty/None value must never become an `IS NULL` match against
+    # unrelated rows.
+    q = Q()
+    if email:
+        q |= Q(email=email)
+    if employee_code:
+        q |= Q(employee_code=employee_code)
+    return manager.filter(q).first()
 
 
 def find_teacher(user):

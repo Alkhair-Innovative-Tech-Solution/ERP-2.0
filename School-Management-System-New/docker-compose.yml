@@ -471,7 +471,19 @@ services:
       DB_PASSWORD: ${STUDENT_DB_PASS:-student_pass}
       REDIS_URL: redis://redis:6379/5
       CAMPUS_SERVICE_URL: http://campus-service:8003
-      AUTH_SERVICE_URL: http://auth-service:8001
+      # Phase C8: overrides the pre-existing http://auth-service:8001 (the
+      # legacy in-stack SMS auth microservice, a DIFFERENT service from the
+      # central Auth-service-main this phase repoints onto) — same pattern
+      # as every prior repointed service (C1-C7).
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
+      # Phase C8: read-only, used only by the offline
+      # remap_central_user_ids management command — see its docstring and
+      # student_service/settings.py's CENTRAL_AUTH_DB_* comment.
+      CENTRAL_AUTH_DB_HOST: ${CENTRAL_AUTH_DB_HOST:-host.docker.internal}
+      CENTRAL_AUTH_DB_PORT: ${CENTRAL_AUTH_DB_PORT:-5432}
+      CENTRAL_AUTH_DB_NAME: ${CENTRAL_AUTH_DB_NAME:-auth_db}
+      CENTRAL_AUTH_DB_USER: ${CENTRAL_AUTH_DB_USER:-erp_admin}
+      CENTRAL_AUTH_DB_PASSWORD: ${CENTRAL_AUTH_DB_PASSWORD:-}
       ATTENDANCE_SERVICE_URL: http://attendance-service:8006
       STAFF_DB_HOST: postgres-staff
       STAFF_DB_NAME: staff_db

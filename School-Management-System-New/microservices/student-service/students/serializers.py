@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import Student, EnrollmentEvent, EnrollmentStatusRequest
 from campus.serializers import CampusSerializer
 from classes.serializers import ClassRoomSerializer
+from central_auth.authentication import CentralAuthUser
 
 
 class EnrollmentEventSerializer(serializers.ModelSerializer):
@@ -92,7 +93,31 @@ class StudentSerializer(serializers.ModelSerializer):
             'attendance_percentage', 'performance', 'fee_status',
             'enrollment_status', 'enrollment_events', 'current_gap_days',
         ]
-    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Phase C8: `organization`/`campus`/`classroom` are writable
+        # PrimaryKeyRelatedFields DRF auto-derives from the model FKs — each
+        # built from that model's OWN `.objects`, which is
+        # OrganizationManager-backed and blind (queryset.none()) for a
+        # central-auth request (see student_service/dual_auth.py's module
+        # docstring). Same fix shape as C1-C7. `Organization`/`ClassRoom`
+        # both have an `all_objects` bypass manager already; `Campus` does
+        # NOT (a campus-service model, out of scope to add one from here —
+        # FLAGGED) — `._base_manager` is used for it instead, same
+        # not-tenant-scoped caveat as dual_auth.py's `_find()` helper.
+        request = self.context.get('request')
+        if request is not None and isinstance(getattr(request, 'user', None), CentralAuthUser):
+            from users.models import Organization
+            from campus.models import Campus
+            from classes.models import ClassRoom
+            if 'organization' in self.fields:
+                self.fields['organization'].queryset = Organization.all_objects.all()
+            if 'campus' in self.fields:
+                self.fields['campus'].queryset = Campus._base_manager.all()
+            if 'classroom' in self.fields:
+                self.fields['classroom'].queryset = ClassRoom.all_objects.all()
+
     def get_campus_name(self, obj):
         """Get campus name for display"""
         return obj.campus.campus_name if obj.campus else None

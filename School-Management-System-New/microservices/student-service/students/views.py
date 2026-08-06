@@ -207,7 +207,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from student_service.dual_auth import (
     IsSuperAdminOrPrincipal, IsTeacherOrAbove, IsCoordinatorOrAbove, HasDynamicPermission,
     IsStudent, DualServiceSubscribed, find_student, find_teacher, find_coordinator,
-    central_person_id, central_tenant_qs, user_display_name,
+    find_principal, central_person_id, central_tenant_qs, user_display_name, get_org_and_tenant,
 )
 from central_auth.authentication import CentralAuthUser
 from rest_framework.decorators import action
@@ -294,7 +294,7 @@ class StudentPagination(PageNumberPagination):
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
-    permission_classes = [IsAuthenticated, (IsTeacherOrAbove | IsStudent)]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, (IsTeacherOrAbove | IsStudent)]
     pagination_class = StudentPagination
     
     # Filtering, search, and ordering
@@ -530,7 +530,12 @@ class StudentViewSet(viewsets.ModelViewSet):
                 obj = Student.all_objects.filter(**filter_kwargs).first()
                 if obj is None:
                     raise Http404
-                if not user.is_superadmin and obj.tenant_id and obj.tenant_id != user.tenant_id:
+                # str()-compare: obj.tenant_id is a uuid.UUID (from the DB),
+                # user.tenant_id is the token's own claim (a plain string)
+                # — same type-mismatch class as the central_user_id compare
+                # below; a bare `!=` here would 404 every non-superadmin
+                # central-auth destroy, even same-tenant ones.
+                if not user.is_superadmin and obj.tenant_id and str(obj.tenant_id) != str(user.tenant_id):
                     raise Http404
             else:
                 obj = Student.objects.with_deleted().get(**filter_kwargs)
@@ -581,7 +586,17 @@ class StudentViewSet(viewsets.ModelViewSet):
             # get_queryset for non-destroy actions; re-check explicitly here
             # too since destroy's raw fetch above bypasses get_queryset —
             # the actual IDOR boundary this whole phase is about.
-            if obj.central_user_id != user.id:
+            # str()-compare both sides: obj.central_user_id is a uuid.UUID
+            # instance (from the DB); user.id is the token's own claim,
+            # always a plain string (JWT claims serialize as strings) — a
+            # bare `!=` between the two types is ALWAYS true (never equal,
+            # regardless of value), which would deny even a matching
+            # student their own record. Found live in this phase's own
+            # proof (A's own retrieve 403'd); the ORM-filter versions
+            # elsewhere in this file (`.filter(central_user_id=user.id)`)
+            # are unaffected — Django's ORM coerces the string for a DB
+            # comparison, only this bare Python comparison needed it.
+            if str(obj.central_user_id) != str(user.id):
                 from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied("You don't have permission to view this student.")
             return obj
@@ -679,6 +694,31 @@ class StudentViewSet(viewsets.ModelViewSet):
         from rest_framework.exceptions import PermissionDenied
 
         user = self.request.user
+
+        if isinstance(user, CentralAuthUser):
+            # No local Organization/quota concept reliably correlates to a
+            # central-auth tenant yet (same gap flagged for notification-
+            # service's fan-out in C7) — quota enforcement is skipped for
+            # this path, flagged rather than guessed at. tenant_id/
+            # central_org_id are stamped instead of organization.
+            org, tenant_id = get_org_and_tenant(user)
+            instance = serializer.save(is_draft=False, tenant_id=tenant_id)
+            instance._actor = user
+            instance.save()
+            # _ensure_student_user_account (below) provisions a LEGACY
+            # users.User login (username=student_id, default password) —
+            # meaningless and actively harmful to auto-run for a
+            # central-auth-created student (would leave a dangling
+            # default-password legacy account nobody uses). Central-auth
+            # students get their login via a NonStaffIdentity, created
+            # centrally (Phase B2-style import) then linked via
+            # central_user_id by remap_central_user_ids — not by this
+            # request. FLAGGED: a newly-created central-auth student has no
+            # working login until that happens; out of scope to build a
+            # live NonStaffIdentity-creation call to auth-service here
+            # (touches only student-service, per this phase's rules).
+            _notify_attendance_sync()
+            return
 
         save_kwargs = {}
         org = getattr(user, 'organization', None)
@@ -1024,13 +1064,23 @@ class StudentViewSet(viewsets.ModelViewSet):
         from students.models import FormOption
         from users.middleware import get_current_organization
 
-        # Prefer org from middleware context (works for _TokenUser stateless JWT).
-        # Falls back to request.user.organization for DB-backed user objects.
-        org = get_current_organization()
-        if org is None:
+        # Phase C8: FormOption.objects is OrganizationManager-backed —
+        # blind (queryset.none()) for a central-auth request, which would
+        # make get_or_create() below re-insert duplicate rows on every call
+        # (see the all_objects field comment in students/models.py). Use
+        # all_objects + the shared "no org" bucket for CentralAuthUser —
+        # this is generic reference data (gender/religion/blood-group
+        # dropdown choices), not tenant-sensitive, so sharing the org=None
+        # rows across every central-auth tenant is a deliberate, low-risk
+        # simplification rather than inventing a central_org_id mapping
+        # this model doesn't have. FLAGGED, not a full tenant-scoped fix.
+        is_central = isinstance(request.user, CentralAuthUser)
+        manager = FormOption.all_objects if is_central else FormOption.objects
+        org = None if is_central else get_current_organization()
+        if org is None and not is_central:
             org = getattr(request.user, 'organization', None)
 
-        qs = FormOption.objects.filter(is_active=True)
+        qs = manager.filter(is_active=True)
         if org:
             qs = qs.filter(organization=org)
         else:
@@ -1056,14 +1106,14 @@ class StudentViewSet(viewsets.ModelViewSet):
         for cat, values in default_seeds.items():
             if cat not in existing_categories:
                 for v, l in values:
-                    FormOption.objects.get_or_create(
+                    manager.get_or_create(
                         organization=org,
                         category=cat,
                         value=v,
                         defaults={'label': l, 'is_active': True}
                     )
 
-        qs = FormOption.objects.filter(is_active=True)
+        qs = manager.filter(is_active=True)
         if org:
             qs = qs.filter(organization=org)
         else:
@@ -1078,7 +1128,7 @@ class StudentViewSet(viewsets.ModelViewSet):
 
 class StudentBulkUploadView(APIView):
     """Upload a CSV file to create multiple students at once."""
-    permission_classes = [IsAuthenticated, IsSuperAdminOrPrincipal | HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, IsSuperAdminOrPrincipal | HasDynamicPermission]
     required_permission = 'add_student'
     parser_classes = [MultiPartParser, FormParser]
 
@@ -1108,7 +1158,7 @@ class StudentBulkUploadView(APIView):
 
 class StudentBulkUploadTemplateView(APIView):
     """Return a CSV template for bulk student upload."""
-    permission_classes = [IsAuthenticated, IsSuperAdminOrPrincipal | HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, IsSuperAdminOrPrincipal | HasDynamicPermission]
     required_permission = 'add_student'
 
     def get(self, request):
@@ -1174,14 +1224,30 @@ def _default_academic_year():
 class TeacherEnrollmentRequestListView(APIView):
     """GET /api/students/enrollment-requests/mine/ — the current user's own
     enrollment-status change requests (any status), newest first."""
-    permission_classes = [IsAuthenticated, IsTeacherOrAbove]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, IsTeacherOrAbove]
 
     def get(self, request):
         from .models import EnrollmentStatusRequest
         from .serializers import EnrollmentStatusRequestSerializer
-        qs = EnrollmentStatusRequest.objects.filter(
-            requested_by_id=getattr(request.user, 'id', None)
-        ).select_related(
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            # requested_by_id is an IntegerField-backed FK to users.User —
+            # can't be filtered against this token's UUID id (same class of
+            # gap as everywhere else). central_requested_by_id is the
+            # correct column, stamped by the create-request path (see
+            # student_status/... note: this service's enrollment-request
+            # create endpoint isn't in this phase's routed surface —
+            # FLAGGED, central_requested_by_id has no live write path yet,
+            # same "schema ready, write path not built" pattern as every
+            # prior phase's "some other person" central-id columns).
+            qs = central_tenant_qs(EnrollmentStatusRequest.all_objects, user).filter(
+                central_requested_by_id=user.id
+            )
+        else:
+            qs = EnrollmentStatusRequest.objects.filter(
+                requested_by_id=getattr(request.user, 'id', None)
+            )
+        qs = qs.select_related(
             'student', 'student__campus', 'requested_by', 'reviewed_by'
         ).order_by('-created_at')
         return Response(EnrollmentStatusRequestSerializer(qs, many=True).data)
@@ -1190,12 +1256,41 @@ class TeacherEnrollmentRequestListView(APIView):
 class CoordinatorEnrollmentRequestListView(APIView):
     """GET /api/students/enrollment-requests/pending/ — pending requests for the
     coordinator's campus + managed levels. `?all=1` includes decided ones too."""
-    permission_classes = [IsAuthenticated, IsCoordinatorOrAbove]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, IsCoordinatorOrAbove]
 
     def get(self, request):
         from coordinator.models import Coordinator
         from .models import EnrollmentStatusRequest
         from .serializers import EnrollmentStatusRequestSerializer
+
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            # Coordinator.get_for_user(user) reads user.username/.email
+            # (doesn't exist in that shape on CentralAuthUser) and is
+            # .objects-backed (OrganizationManager blind spot) — use the
+            # already-resolved find_coordinator/find_principal instead.
+            coord = find_coordinator(user)
+            principal = None if coord else find_principal(user)
+            if not coord and not (principal or user.is_superadmin):
+                return Response({'error': 'No coordinator profile / campus.'}, status=status.HTTP_400_BAD_REQUEST)
+            base = central_tenant_qs(EnrollmentStatusRequest.all_objects, user)
+            if coord and coord.campus_id:
+                qs = base.filter(student__campus_id=coord.campus_id)
+                managed = [l for l in (list(coord.assigned_levels.all()) or ([coord.level] if coord.level else [])) if l]
+                if managed:
+                    qs = qs.filter(
+                        Q(student__classroom__grade__level__in=managed)
+                        | Q(student__last_classroom__grade__level__in=managed)
+                    )
+            elif principal and principal.campus_id:
+                qs = base.filter(student__campus_id=principal.campus_id)
+            else:
+                # superadmin, or a principal/coordinator with no campus set
+                qs = base
+            if request.query_params.get('all') not in ('1', 'true', 'True'):
+                qs = qs.filter(status='pending')
+            qs = qs.select_related('student', 'student__campus', 'requested_by', 'reviewed_by').distinct()
+            return Response(EnrollmentStatusRequestSerializer(qs, many=True).data)
 
         coord = Coordinator.get_for_user(request.user)
         if not coord or not coord.campus:
@@ -1224,7 +1319,7 @@ class CoordinatorEnrollmentRequestListView(APIView):
 class CoordinatorEnrollmentRequestApproveView(APIView):
     """POST /api/students/enrollment-requests/<pk>/approve/ (body: response?) —
     applies the requested change via Student.change_status()."""
-    permission_classes = [IsAuthenticated, IsCoordinatorOrAbove]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, IsCoordinatorOrAbove]
 
     def post(self, request, pk):
         from django.shortcuts import get_object_or_404
@@ -1234,6 +1329,44 @@ class CoordinatorEnrollmentRequestApproveView(APIView):
         from notifications.services import create_notification
         from .models import EnrollmentStatusRequest
         from .serializers import EnrollmentStatusRequestSerializer
+
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            req = get_object_or_404(EnrollmentStatusRequest.all_objects, id=pk)
+            coord = find_coordinator(user)
+            if not coord and not (user.is_superadmin or find_principal(user)):
+                return Response({'error': 'Only a coordinator or above can review requests.'}, status=status.HTTP_403_FORBIDDEN)
+            if coord and req.student.campus_id != coord.campus_id:
+                return Response({'error': 'This request is outside your campus.'}, status=status.HTTP_403_FORBIDDEN)
+            if req.status != 'pending':
+                return Response({'error': f'Request already {req.status}.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                req.student.change_status(
+                    req.requested_status, req.event_date,
+                    reason=req.reason, reason_code=req.reason_code, user=None,
+                )
+            except DjangoValidationError as e:
+                detail = e.message_dict if hasattr(e, 'message_dict') else {'error': e.messages}
+                return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+            # change_status() takes a plain `user` FK value, not a
+            # central_*_id — stamp the just-created EnrollmentEvent's
+            # central_created_by_id as a small follow-up write rather than
+            # extending that shared method's signature (used by both paths).
+            last_event = req.student.enrollment_events.order_by('-created_at').first()
+            if last_event is not None:
+                last_event.central_created_by_id = central_person_id(user)
+                last_event.save(update_fields=['central_created_by_id'])
+            req.status = 'approved'
+            req.reviewed_by = None
+            req.central_reviewed_by_id = central_person_id(user)
+            req.coordinator_response = (request.data.get('response') or '').strip() or None
+            req.reviewed_at = timezone.now()
+            req.save(update_fields=['status', 'reviewed_by', 'central_reviewed_by_id', 'coordinator_response', 'reviewed_at'])
+            # req.requested_by is always None on this path today (no live
+            # central-auth create-request endpoint yet — see
+            # TeacherEnrollmentRequestListView's note), so the notification
+            # fan-out below is skipped rather than crashing on a None recipient.
+            return Response(EnrollmentStatusRequestSerializer(req).data)
 
         req = get_object_or_404(EnrollmentStatusRequest, id=pk)
         coord = Coordinator.get_for_user(request.user)
@@ -1275,7 +1408,7 @@ class CoordinatorEnrollmentRequestApproveView(APIView):
 class CoordinatorEnrollmentRequestRejectView(APIView):
     """POST /api/students/enrollment-requests/<pk>/reject/ (body: response) —
     rejects the request (a reason is required)."""
-    permission_classes = [IsAuthenticated, IsCoordinatorOrAbove]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, IsCoordinatorOrAbove]
 
     def post(self, request, pk):
         from django.shortcuts import get_object_or_404
@@ -1284,6 +1417,27 @@ class CoordinatorEnrollmentRequestRejectView(APIView):
         from notifications.services import create_notification
         from .models import EnrollmentStatusRequest
         from .serializers import EnrollmentStatusRequestSerializer
+
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            req = get_object_or_404(EnrollmentStatusRequest.all_objects, id=pk)
+            coord = find_coordinator(user)
+            if not coord and not (user.is_superadmin or find_principal(user)):
+                return Response({'error': 'Only a coordinator or above can review requests.'}, status=status.HTTP_403_FORBIDDEN)
+            if coord and req.student.campus_id != coord.campus_id:
+                return Response({'error': 'This request is outside your campus.'}, status=status.HTTP_403_FORBIDDEN)
+            if req.status != 'pending':
+                return Response({'error': f'Request already {req.status}.'}, status=status.HTTP_400_BAD_REQUEST)
+            response_reason = (request.data.get('response') or '').strip()
+            if not response_reason:
+                return Response({'error': 'A reason is required to reject the request.'}, status=status.HTTP_400_BAD_REQUEST)
+            req.status = 'rejected'
+            req.reviewed_by = None
+            req.central_reviewed_by_id = central_person_id(user)
+            req.coordinator_response = response_reason
+            req.reviewed_at = timezone.now()
+            req.save(update_fields=['status', 'reviewed_by', 'central_reviewed_by_id', 'coordinator_response', 'reviewed_at'])
+            return Response(EnrollmentStatusRequestSerializer(req).data)
 
         req = get_object_or_404(EnrollmentStatusRequest, id=pk)
         coord = Coordinator.get_for_user(request.user)

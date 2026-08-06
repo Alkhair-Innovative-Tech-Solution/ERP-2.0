@@ -183,21 +183,45 @@ def _get_coordinator_teacher_identifiers(user, coordinator_obj):
 
 
 def _db_user(user):
-    """Return a real DB User instance for FK fields, or None for _TokenUser."""
+    """Return a real DB User instance for FK fields, or None for _TokenUser
+    / CentralAuthUser.
+
+    Phase C10: a CentralAuthUser's `id` is a UUID string, not this table's
+    (integer) primary key. `User.objects.get(pk=uid)` with a UUID string
+    raises ValueError deep inside the ORM's query-building — NOT
+    User.DoesNotExist — so the original narrower except silently let that
+    propagate. This function is called from nearly every workflow view
+    below (marked_by/created_by/updated_by/submitted_by/reviewed_by/
+    finalized_by/reopened_by), so an unguarded crash here would break the
+    entire central-auth path service-wide. int(uid) is a no-op for every
+    legacy caller (uid is already an int there); for a central-auth caller
+    it safely resolves to None (correct: no local User row exists for a
+    central identity — the central_*_id UUID columns carry that identity
+    instead, stamped separately in each view)."""
     from django.db.models import Model
     if isinstance(user, Model):
         return user
-    # _TokenUser — look up by pk, return None if not found locally
+    # _TokenUser / CentralAuthUser — look up by pk, return None if not found locally
     uid = getattr(user, 'id', None) or getattr(user, 'pk', None)
     if uid:
         try:
-            return User.objects.get(pk=uid)
-        except User.DoesNotExist:
+            return User.objects.get(pk=int(uid))
+        except (User.DoesNotExist, TypeError, ValueError):
             pass
     return None
 
 
 from .permissions import HasAttendanceViewPermission
+from central_auth.authentication import CentralAuthUser
+from attendance_service.dual_auth import (
+    DualServiceSubscribed,
+    central_person_id,
+    get_org_and_tenant,
+    central_tenant_qs,
+    find_teacher as _central_find_teacher,
+    find_coordinator as _central_find_coordinator,
+    find_principal as _central_find_principal,
+)
 from .models import Attendance, StudentAttendance, Weekend, BiometricDevice, BiometricEmployeeMapping, StaffAttendance, EmployeeShiftTiming
 from .serializers import (
     AttendanceSerializer,
@@ -216,11 +240,70 @@ from notifications.services import create_notification
 from .services.alerts import process_consecutive_absence_alerts
 from .services.holiday_utils import (
     collect_shifts_from_levels,
-    normalize_shift_value,  
+    normalize_shift_value,
     resolve_allowed_shifts,
     validate_grades_for_levels,
     validate_levels_for_shift,
 )
+
+
+# ── Phase C10: central-auth workflow helpers ────────────────────────────────
+# Shared by mark_attendance / mark_bulk_attendance / edit_attendance /
+# submit_attendance / review_attendance / finalize_attendance /
+# coordinator_approve_attendance / coordinator_bulk_approve_attendance /
+# reopen_attendance below — kept together here rather than duplicated per
+# view, same "helper once, not reimplemented per view" approach C1-C9 used.
+
+def _resolve_classroom_for_user(classroom_id, user):
+    """ClassRoom.objects is OrganizationManager-backed (blind for
+    central-auth — the org context-var is never populated on that path, see
+    dual_auth.py's module docstring). ClassRoom already has `all_objects` +
+    `tenant_id` (added by campus-service's own C5 phase, already on main) —
+    reused here via central_tenant_qs, not reinvented. Legacy path
+    completely unchanged (still `get_object_or_404(ClassRoom, id=...)`)."""
+    if isinstance(user, CentralAuthUser):
+        return get_object_or_404(central_tenant_qs(ClassRoom.all_objects, user), id=classroom_id)
+    return get_object_or_404(ClassRoom, id=classroom_id)
+
+
+def _student_manager_for_user(user):
+    """Student.objects is OrganizationManager-backed (blind for
+    central-auth). Student already has `all_objects` (student-service's own
+    C8 phase, already on main). Legacy path unchanged (still
+    Student.objects)."""
+    return Student.all_objects if isinstance(user, CentralAuthUser) else Student.objects
+
+
+def _central_role_tier(user):
+    """Resolve a CentralAuthUser to the SAME role tiers the legacy path
+    checks via user.is_teacher()/is_coordinator()/is_principal()/
+    is_superuser (none of which exist on CentralAuthUser — calling them
+    would AttributeError, not silently return False). Returns one of
+    'superadmin' / 'principal' / 'coordinator' / 'teacher' / None (fails
+    closed — no local-DB match resolved for this token). Mirrors the
+    `find_principal`/`find_coordinator`/`find_teacher` local-DB-match
+    technique C3/C6/C8/C9 established; `admin`/`org_admin` (part of the
+    legacy role surface) have no local table or claim to resolve against —
+    same flagged gap as every prior phase."""
+    if not isinstance(user, CentralAuthUser):
+        return None
+    if user.is_superadmin:
+        return 'superadmin'
+    if _central_find_principal(user):
+        return 'principal'
+    if _central_find_coordinator(user):
+        return 'coordinator'
+    if _central_find_teacher(user):
+        return 'teacher'
+    return None
+
+
+def _stamp_central_actor(instance, user, field_name):
+    """Stamp `central_<x>_id` on `instance` with the acting CentralAuthUser's
+    own identity. No-op for a legacy token (nothing to stamp — the legacy
+    FK field already carries the identity via _db_user())."""
+    if isinstance(user, CentralAuthUser):
+        setattr(instance, field_name, central_person_id(user))
 
 
 @api_view(['POST'])
@@ -238,9 +321,9 @@ def mark_attendance(request):
         classroom_id = data['classroom_id']
         date = data['date']
         student_attendance_data = data['student_attendance']
-        
-        classroom = get_object_or_404(ClassRoom, id=classroom_id)
-        
+
+        classroom = _resolve_classroom_for_user(classroom_id, request.user)
+
         # Check if date is a holiday (support multiple levels and grade-specific)
         from .models import Holiday
         level = classroom.grade.level if classroom.grade else None
@@ -273,30 +356,48 @@ def mark_attendance(request):
                     }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get teacher from request user
-        try:
-            # Find teacher by employee code (username) since there's no direct relationship
-            from teachers.models import Teacher
-            teacher = Teacher.objects.get(employee_code=request.user.username)
-        except Teacher.DoesNotExist:
-            teacher = None
-        
+        user = request.user
+        is_central = isinstance(user, CentralAuthUser)
+        if is_central:
+            teacher = _central_find_teacher(user)
+        else:
+            try:
+                # Find teacher by employee code (username) since there's no direct relationship
+                from teachers.models import Teacher
+                teacher = Teacher.objects.get(employee_code=request.user.username)
+            except Teacher.DoesNotExist:
+                teacher = None
+
         with transaction.atomic():
             # Create or get attendance record
-            # marked_by must be a real DB User instance (not _TokenUser)
-            user = request.user
+            # marked_by must be a real DB User instance (not _TokenUser) —
+            # None for a central-auth caller, whose identity is instead
+            # stamped into central_marked_by_id/central_submitted_by_id below.
             if teacher and hasattr(teacher, 'user') and teacher.user is not None:
                 marked_by_user = teacher.user
             else:
                 marked_by_user = _db_user(user)
             db_user = marked_by_user
 
-            # Automatically set organization if user belongs to one
-            org = getattr(user, 'organization', None)
-            if org is None:
-                from users.middleware import get_current_organization
-                org = get_current_organization()
+            # Phase C10: central-auth org/tenant resolution — the legacy
+            # get_current_organization() middleware contextvar is never
+            # populated for a central-auth request (see dual_auth.py's
+            # module docstring), so it's skipped entirely on that path.
+            if is_central:
+                org, tenant_id = get_org_and_tenant(user)
+            else:
+                org = getattr(user, 'organization', None)
+                if org is None:
+                    from users.middleware import get_current_organization
+                    org = get_current_organization()
+                tenant_id = None
 
-            attendance, created = Attendance.objects.get_or_create(
+            # Attendance.objects is OrganizationManager-backed (blind for
+            # central-auth) — get_or_create on it would silently create a
+            # duplicate row every call (C5-class hazard). all_objects for
+            # central-auth; legacy path unchanged.
+            attendance_manager = Attendance.all_objects if is_central else Attendance.objects
+            attendance, created = attendance_manager.get_or_create(
                 classroom=classroom,
                 date=date,
                 defaults={
@@ -304,15 +405,20 @@ def mark_attendance(request):
                     'status': 'under_review',
                     'submitted_at': timezone.now(),
                     'submitted_by': db_user,
-                    'organization': org
+                    'organization': org,
+                    'tenant_id': tenant_id,
                 }
             )
-            
+            _stamp_central_actor(attendance, user, 'central_marked_by_id')
+            _stamp_central_actor(attendance, user, 'central_submitted_by_id')
+
             # If attendance already exists, update status to under_review
             if not created:
                 # Update organization if missing
                 if not attendance.organization and org:
                     attendance.organization = org
+                if not attendance.tenant_id and tenant_id:
+                    attendance.tenant_id = tenant_id
                 attendance.status = 'under_review'
                 attendance.submitted_at = timezone.now()
                 attendance.submitted_by = db_user
@@ -327,17 +433,21 @@ def mark_attendance(request):
 
             # Create new student attendance records
             for student_data in student_attendance_data:
-                StudentAttendance.objects.create(
+                sa = StudentAttendance.objects.create(
                     attendance=attendance,
                     student_id=student_data['student_id'],
                     status=student_data['status'],
                     remarks=student_data.get('remarks', ''),
-                    organization=org
+                    organization=org,
+                    tenant_id=tenant_id,
                 )
-            
+                _stamp_central_actor(sa, user, 'central_created_by_id')
+                if is_central:
+                    sa.save(update_fields=['central_created_by_id'])
+
             # Update attendance summary
             attendance.update_counts()
-            
+
             # Save attendance with updated status
             attendance.save()
 
@@ -345,6 +455,9 @@ def mark_attendance(request):
             # the Logs view had no record of who marked a class or when — only
             # approvals showed. organization is set so it is visible to the
             # org-scoped Logs viewers (AuditLog uses OrganizationManager).
+            # AuditLog.user is a legacy FK — _db_user(request.user) so a
+            # central-auth caller (no local User row) safely resolves to
+            # None instead of crashing the assignment.
             try:
                 from .models import AuditLog
                 AuditLog.objects.create(
@@ -352,7 +465,7 @@ def mark_attendance(request):
                     action='mark',
                     entity_type='Attendance',
                     entity_id=attendance.id,
-                    user=request.user,
+                    user=_db_user(request.user),
                     organization=attendance.organization,
                     ip_address=request.META.get('REMOTE_ADDR'),
                     changes={
@@ -493,13 +606,13 @@ def mark_bulk_attendance(request):
                 'error': 'Invalid date format. Use YYYY-MM-DD.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        classroom = get_object_or_404(ClassRoom, id=classroom_id)
-        
+        classroom = _resolve_classroom_for_user(classroom_id, request.user)
+
         # Check if date is a holiday (support multiple levels and grade-specific)
         from .models import Holiday
         level = classroom.grade.level if classroom.grade else None
         grade = classroom.grade if classroom.grade else None
-        
+
         if level:
             # Check for holidays matching this level and date
             holidays = Holiday.objects.filter(
@@ -534,10 +647,14 @@ def mark_bulk_attendance(request):
         # Check if it's a Sunday and auto-create weekend entry, and block teacher marking
         if date_obj.weekday() == 6:  # Sunday is 6 in Python's weekday()
             level = classroom.grade.level
+            # Weekend.created_by is a legacy FK — _db_user() so a
+            # central-auth caller (no local User row) resolves to None
+            # instead of ValueError-ing on assignment (request.user isn't a
+            # Model instance for either token type).
             Weekend.objects.get_or_create(
                 date=date_obj,
                 level=level,
-                defaults={'created_by': request.user}
+                defaults={'created_by': _db_user(request.user)}
             )
             # Teachers should not be able to mark Sunday attendance
             try:
@@ -549,25 +666,36 @@ def mark_bulk_attendance(request):
                     'error': 'Weekend (Sunday): attendance marking is disabled',
                     'is_weekend': True
                 }, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        is_central = isinstance(request.user, CentralAuthUser)
+        student_manager = _student_manager_for_user(request.user)
+
         # Get all students in this class (non-deleted students)
         # Removed is_active filter to ensure all students appear consistently
-        all_students = Student.objects.filter(classroom=classroom, is_deleted=False)
+        all_students = student_manager.filter(classroom=classroom, is_deleted=False)
         all_student_ids = list(all_students.values_list('id', flat=True))
-        
+
         with transaction.atomic():
             # Get teacher from request user
-            teacher = None
-            try:
-                teacher = Teacher.objects.get(employee_code=request.user.username)
-            except Teacher.DoesNotExist:
-                pass
-            
-            # Automatically set organization if user belongs to one
-            org = getattr(request.user, 'organization', None)
-            if org is None:
-                from users.middleware import get_current_organization
-                org = get_current_organization()
+            if is_central:
+                teacher = _central_find_teacher(request.user)
+            else:
+                teacher = None
+                try:
+                    teacher = Teacher.objects.get(employee_code=request.user.username)
+                except Teacher.DoesNotExist:
+                    pass
+
+            # Phase C10: central-auth org/tenant resolution — see
+            # mark_attendance's identical block above.
+            if is_central:
+                org, tenant_id = get_org_and_tenant(request.user)
+            else:
+                org = getattr(request.user, 'organization', None)
+                if org is None:
+                    from users.middleware import get_current_organization
+                    org = get_current_organization()
+                tenant_id = None
 
             # Create or get attendance record
             # marked_by must be a real DB User instance (not _TokenUser)
@@ -576,7 +704,8 @@ def mark_bulk_attendance(request):
             else:
                 marked_by_user = _db_user(request.user)
             db_user = marked_by_user
-            attendance, created = Attendance.objects.get_or_create(
+            attendance_manager = Attendance.all_objects if is_central else Attendance.objects
+            attendance, created = attendance_manager.get_or_create(
                 classroom=classroom,
                 date=date_obj,
                 defaults={
@@ -584,50 +713,60 @@ def mark_bulk_attendance(request):
                     'status': 'under_review',
                     'submitted_at': timezone.now(),
                     'submitted_by': db_user,
-                    'organization': org
+                    'organization': org,
+                    'tenant_id': tenant_id,
                 }
             )
-            
+            _stamp_central_actor(attendance, request.user, 'central_marked_by_id')
+            _stamp_central_actor(attendance, request.user, 'central_submitted_by_id')
+
             # If attendance already exists, update status to under_review
             if not created:
                 # Update organization if missing
                 if not attendance.organization and org:
                     attendance.organization = org
+                if not attendance.tenant_id and tenant_id:
+                    attendance.tenant_id = tenant_id
                 attendance.status = 'under_review'
                 attendance.submitted_at = timezone.now()
                 attendance.submitted_by = db_user
                 attendance.marked_by = marked_by_user
-            
+
             # Clear existing student attendance records
             attendance.student_attendances.all().delete()
-            
+
             # Create student attendance records
             for student_data in student_attendance_data:
                 student_id = student_data.get('student_id')
                 attendance_status = student_data.get('status', 'present')
                 remarks = student_data.get('remarks', '')
-                
+
                 if not student_id:
                     continue
-                
+
                 # Verify student belongs to this classroom
                 try:
-                    student = Student.objects.get(id=student_id, classroom=classroom)
-                    StudentAttendance.objects.create(
+                    student = student_manager.get(id=student_id, classroom=classroom)
+                    sa = StudentAttendance.objects.create(
                         attendance=attendance,
                         student=student,
                         status=attendance_status,
                         remarks=remarks,
                         created_by=_db_user(request.user),
                         updated_by=_db_user(request.user),
-                        organization=attendance.organization
+                        organization=attendance.organization,
+                        tenant_id=tenant_id,
                     )
+                    if is_central:
+                        _stamp_central_actor(sa, request.user, 'central_created_by_id')
+                        _stamp_central_actor(sa, request.user, 'central_updated_by_id')
+                        sa.save(update_fields=['central_created_by_id', 'central_updated_by_id'])
                 except Student.DoesNotExist:
                     continue
 
             # Update attendance summary
             attendance.update_counts()
-            
+
             # Save attendance with updated status
             attendance.save()
 
@@ -642,7 +781,7 @@ def mark_bulk_attendance(request):
                     action='mark',
                     entity_type='Attendance',
                     entity_id=attendance.id,
-                    user=request.user,
+                    user=_db_user(request.user),
                     organization=attendance.organization,
                     ip_address=request.META.get('REMOTE_ADDR'),
                     changes={
@@ -656,7 +795,7 @@ def mark_bulk_attendance(request):
 
             # Add edit history after saving
             attendance.add_edit_history(request.user, 'marked', 'Attendance marked and submitted for review')
-            
+
             # Trigger consecutive absence alerts for class teacher
             try:
                 alerts = process_consecutive_absence_alerts(attendance)
@@ -973,18 +1112,94 @@ def edit_attendance(request, attendance_id):
     Teachers can edit within 7 days, Coordinators can edit anytime for their level
     """
     try:
-        attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
         user = request.user
-        
+        is_central = isinstance(user, CentralAuthUser)
+        # Phase C10: Attendance.objects is OrganizationManager-backed
+        # (blind for central-auth) — central_tenant_qs on all_objects
+        # instead. Legacy path completely unchanged.
+        if is_central:
+            attendance = get_object_or_404(
+                central_tenant_qs(Attendance.all_objects, user), id=attendance_id, is_deleted=False
+            )
+        else:
+            attendance = get_object_or_404(Attendance, id=attendance_id, is_deleted=False)
+
         # Check if user can edit this attendance
         can_edit = False
         edit_reason = None
-        
+        central_tier = None
+
+        if is_central:
+            # Phase C10: central-safe 7-day edit rule. `user.is_superuser`/
+            # `.is_teacher()`/`.is_coordinator()`/`.is_principal()` don't
+            # exist on CentralAuthUser — calling them raises AttributeError,
+            # not "falls through to False", so this whole block can't just
+            # be skipped. `_central_role_tier` resolves the SAME tiers via
+            # local DB match (find_teacher/find_coordinator/find_principal
+            # + the is_superadmin claim), same technique C3/C6/C8/C9's dual
+            # role classes used. The 7-day window arithmetic itself below is
+            # copied VERBATIM from the legacy teacher branch two paragraphs
+            # down — only the role RESOLUTION differs, the rule enforced is
+            # identical (teacher: <=7 days on under_review/draft/submitted,
+            # never on approved; coordinator/principal: unlimited, scoped to
+            # their level/campus).
+            central_tier = _central_role_tier(user)
+            if central_tier == 'superadmin':
+                can_edit = True
+                edit_reason = "SuperAdmin edit"
+            elif central_tier == 'teacher':
+                teacher = _central_find_teacher(user)
+                is_allowed = False
+                if teacher and teacher.assigned_classroom == attendance.classroom:
+                    is_allowed = True
+                elif teacher and teacher.assigned_classrooms.filter(id=attendance.classroom_id).exists():
+                    is_allowed = True
+                elif teacher and getattr(attendance.classroom, 'class_teacher_id', None) == teacher.id:
+                    is_allowed = True
+
+                if is_allowed:
+                    if attendance.status == 'approved':
+                        return Response({
+                            'error': 'Cannot edit approved attendance. Please contact your coordinator if changes are needed.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                    days_diff = (timezone.now().date() - attendance.date).days
+                    if days_diff <= 7:
+                        can_edit = True
+                        edit_reason = "Teacher edit within 7 days"
+                    else:
+                        return Response({
+                            'error': f'Cannot edit attendance older than 7 days. This attendance is {days_diff} days old.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+            elif central_tier == 'coordinator':
+                coordinator = _central_find_coordinator(user)
+                allowed = False
+                if coordinator:
+                    classroom_level = attendance.classroom.grade.level if attendance.classroom.grade else None
+                    if coordinator.shift == 'both':
+                        if coordinator.assigned_levels.exists():
+                            allowed = classroom_level in coordinator.assigned_levels.all()
+                        elif coordinator.level:
+                            allowed = classroom_level == coordinator.level
+                    else:
+                        allowed = bool(coordinator.level and classroom_level == coordinator.level)
+                if allowed:
+                    can_edit = True
+                    edit_reason = "Coordinator edit"
+            elif central_tier == 'principal':
+                principal = _central_find_principal(user)
+                if (principal and getattr(principal, 'is_currently_active', True)
+                        and principal.campus == attendance.classroom.campus):
+                    can_edit = True
+                    edit_reason = "Principal edit"
+            # central_tier is None (unresolvable local role) -> can_edit
+            # stays False, fails closed — same as every unresolvable-tier
+            # gap flagged in C8/C9's dual role classes.
+
         # SuperAdmin can edit anything
-        if user.is_superuser:
+        elif user.is_superuser:
             can_edit = True
             edit_reason = "SuperAdmin edit"
-        
+
         # Check teacher permissions (7-day limit)
         elif user.is_teacher():
             try:
@@ -1079,36 +1294,42 @@ def edit_attendance(request, attendance_id):
                 'error': 'Student attendance data is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        student_manager = _student_manager_for_user(user)
         with transaction.atomic():
             # Clear existing student attendance records
             attendance.student_attendances.all().delete()
-            
+
             # Create new student attendance records
             for student_data in student_attendance_data:
                 student_id = student_data.get('student_id')
                 attendance_status = student_data.get('status', 'present')
                 remarks = student_data.get('remarks', '')
-                
+
                 if not student_id:
                     continue
-                
+
                 try:
-                    student = Student.objects.get(id=student_id, classroom=attendance.classroom)
-                    StudentAttendance.objects.create(
+                    student = student_manager.get(id=student_id, classroom=attendance.classroom)
+                    sa = StudentAttendance.objects.create(
                         student=student,
                         attendance=attendance,
                         status=attendance_status,
                         remarks=remarks,
                         created_by=_db_user(user),
                         updated_by=_db_user(user),
-                        organization=attendance.organization
+                        organization=attendance.organization,
+                        tenant_id=attendance.tenant_id,
                     )
+                    if is_central:
+                        _stamp_central_actor(sa, user, 'central_created_by_id')
+                        _stamp_central_actor(sa, user, 'central_updated_by_id')
+                        sa.save(update_fields=['central_created_by_id', 'central_updated_by_id'])
                 except Student.DoesNotExist:
                     continue
-            
+
             # Update attendance counts
             attendance.update_counts()
-            
+
             # Add edit history
             attendance.add_edit_history(
                 user=user,
@@ -1119,29 +1340,42 @@ def edit_attendance(request, attendance_id):
                     'student_count': len(student_attendance_data)
                 }
             )
-            
-            # Update status and marked_by if it's a teacher
+
+            # Update status and marked_by if it's a teacher (central_tier
+            # is None on the legacy path, so `central_tier == 'teacher'`
+            # never short-circuits legacy behavior; `user.is_teacher()` is
+            # never evaluated for a central-auth user, since it would
+            # AttributeError — is_central is checked first).
             teacher = None
-            if user.is_teacher():
+            if (is_central and central_tier == 'teacher') or (not is_central and user.is_teacher()):
                 # Keep status as under_review if not approved
                 if attendance.status != 'approved':
                     attendance.status = 'under_review'
                     attendance.submitted_at = timezone.now()
                     attendance.submitted_by = _db_user(user)
+                    _stamp_central_actor(attendance, user, 'central_submitted_by_id')
 
-                # Get teacher for notification
-                try:
-                    teacher = Teacher.objects.get(employee_code=user.username)
-                    if hasattr(teacher, 'user') and teacher.user is not None:
-                        attendance.marked_by = teacher.user
-                    else:
-                        attendance.marked_by = _db_user(user)
-                except Teacher.DoesNotExist:
+                if is_central:
+                    teacher = _central_find_teacher(user)
                     attendance.marked_by = _db_user(user)
-                
+                    _stamp_central_actor(attendance, user, 'central_marked_by_id')
+                else:
+                    # Get teacher for notification
+                    try:
+                        teacher = Teacher.objects.get(employee_code=user.username)
+                        if hasattr(teacher, 'user') and teacher.user is not None:
+                            attendance.marked_by = teacher.user
+                        else:
+                            attendance.marked_by = _db_user(user)
+                    except Teacher.DoesNotExist:
+                        attendance.marked_by = _db_user(user)
+
                 # Save only specific fields to avoid updating created_at
-                attendance.save(update_fields=['marked_by', 'status', 'submitted_at', 'submitted_by', 'updated_at'])
-            
+                update_fields = ['marked_by', 'status', 'submitted_at', 'submitted_by', 'updated_at']
+                if is_central:
+                    update_fields += ['central_marked_by_id', 'central_submitted_by_id']
+                attendance.save(update_fields=update_fields)
+
         # Trigger consecutive absence alerts for class teacher
         try:
             alerts = process_consecutive_absence_alerts(attendance)
@@ -1152,7 +1386,12 @@ def edit_attendance(request, attendance_id):
 
             # Send notification to coordinator when teacher updates attendance
             # (Don't send if coordinator is editing their own attendance)
-            if user.is_teacher():
+            # Phase C10: notification fan-out is out of this phase's scope
+            # (see docs/PHASE_C10_ATTENDANCE_SERVICE_RESULT.md's "deferred"
+            # section) — `not is_central` guard just prevents this
+            # legacy-only block from AttributeError-ing on a CentralAuthUser
+            # (no `.is_teacher()`/`.username`), same as everywhere else.
+            if not is_central and user.is_teacher():
                 print(f"[DEBUG] Teacher updating attendance - user: {user.username}, is_teacher: {user.is_teacher()}, teacher: {teacher}")
                 try:
                     # Get coordinator for this classroom's level

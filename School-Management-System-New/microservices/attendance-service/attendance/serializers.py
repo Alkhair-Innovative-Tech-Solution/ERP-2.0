@@ -342,9 +342,16 @@ class AttendanceMarkingSerializer(serializers.Serializer):
     )
     
     def validate_classroom_id(self, value):
-        try:
-            ClassRoom.objects.get(id=value)
-        except ClassRoom.DoesNotExist:
+        # Phase C10: ClassRoom.objects is OrganizationManager-backed (blind
+        # for central-auth requests — the org context-var is never
+        # populated on that path). An existence-only check via
+        # `all_objects` is safe here for BOTH token types: the real
+        # tenant/org scoping still happens downstream when the view fetches
+        # the classroom for use (mark_attendance's
+        # `_resolve_classroom_for_user`, still `.objects`-scoped for a
+        # legacy caller) — this method only validates the id is real, not
+        # that the caller may access it.
+        if not ClassRoom.all_objects.filter(id=value).exists():
             raise serializers.ValidationError("Classroom does not exist")
         return value
     

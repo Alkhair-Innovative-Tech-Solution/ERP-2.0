@@ -10,9 +10,38 @@ import json
 User = get_user_model()
 
 
-class Attendance(models.Model):
+class CentralAuthFieldsMixin(models.Model):
+    """
+    Phase C10: additive, nullable fields for the central-auth repoint. Same
+    shape as C1-C9's mixin (campus-service's `campus/models.py`,
+    timetable-service's `timetable/models.py`, etc.) — dual-run, the
+    existing `organization` FK and OrganizationManager-based `objects`
+    manager on each model are untouched; these are new, parallel fields
+    used only by the central-auth code path (see
+    attendance_service/dual_auth.py, attendance/views.py).
+
+    tenant_id:       stamped from the verified token's tenant_id claim on
+                      create, used to scope reads for central-auth requests.
+    central_org_id:   maps this row's local `users.Organization` to its
+                      central-auth Organization equivalent. Nullable,
+                      backfillable — synthetic-only for now.
+    """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        abstract = True
+
+
+class Attendance(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C10: unfiltered manager — needed by the central-auth read path
+    # (see attendance_service/dual_auth.py's central_tenant_qs), mirroring
+    # the C5-class hazard fix established in every prior phase (this model
+    # had NO unfiltered manager at all before this phase — confirmed by
+    # grep, zero `all_objects` hits anywhere in this file).
+    all_objects = models.Manager()
     """Model for tracking classroom attendance with audit trail"""
     classroom = models.ForeignKey(
         'classes.ClassRoom',
@@ -83,7 +112,22 @@ class Attendance(models.Model):
     reopened_at = models.DateTimeField(null=True, blank=True)
     reopened_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reopened_attendances')
     reopen_reason = models.TextField(null=True, blank=True)
-    
+
+    # Phase C10: central-auth counterparts of the 8 legacy audit-trail
+    # person-FKs above. A CentralAuthUser has no row in this service's
+    # local `users.User` table, so the legacy FK is left NULL on that path
+    # (see attendance_service/dual_auth.py's central_person_id / the
+    # views.py workflow functions) and the acting identity is stamped here
+    # instead. Nullable, additive — dual-run, nothing removed.
+    central_marked_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_created_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_updated_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_deleted_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_submitted_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_reviewed_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_finalized_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_reopened_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     # Archive fields for holiday replacement
     replaced_by_holiday = models.BooleanField(default=False)
     replaced_at = models.DateTimeField(null=True, blank=True)
@@ -184,8 +228,16 @@ class Attendance(models.Model):
             db_user = None
             if uid:
                 try:
-                    db_user = User.objects.get(pk=uid)
-                except User.DoesNotExist:
+                    # Phase C10: a CentralAuthUser's `id` is a UUID string,
+                    # not this table's (integer) primary key — `pk=uid`
+                    # would raise ValueError (not User.DoesNotExist) deep
+                    # inside the ORM's query-building, uncaught by the
+                    # narrower except below, and add_edit_history() is
+                    # called from every workflow step. int(uid) no-ops for
+                    # every legacy caller (uid is already an int there) and
+                    # safely routes a central-auth caller to db_user=None.
+                    db_user = User.objects.get(pk=int(uid))
+                except (User.DoesNotExist, TypeError, ValueError):
                     pass
 
         user_name = (
@@ -239,9 +291,12 @@ class Attendance(models.Model):
         super().save(*args, **kwargs)
 
 
-class StudentAttendance(models.Model):
+class StudentAttendance(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C10: unfiltered manager — same C5-class hazard fix as Attendance
+    # above (no `all_objects` existed on this model before this phase either).
+    all_objects = models.Manager()
     """Model for tracking individual student attendance with audit trail"""
     STATUS_CHOICES = [
         ('present', 'Present'),
@@ -296,7 +351,13 @@ class StudentAttendance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    
+
+    # Phase C10: central-auth counterparts of the 2 legacy audit-trail
+    # person-FKs above — same reasoning as Attendance's central_*_by_id
+    # block.
+    central_created_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_updated_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     class Meta:
         unique_together = ['student', 'attendance']
         ordering = ['attendance__date', 'student__name']

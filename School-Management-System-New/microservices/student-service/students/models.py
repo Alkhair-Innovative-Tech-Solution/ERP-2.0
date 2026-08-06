@@ -29,7 +29,17 @@ class FormOption(models.Model):
     
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
-    
+    # Phase C8: was missing entirely (the C5-class hazard) — `form_options`
+    # (students/views.py) is reachable by every authenticated role
+    # including students, and without this, `.objects`' blind spot for
+    # central-auth requests would make `get_or_create()` re-insert
+    # duplicate rows on every call (the blind-spotted SELECT never finds
+    # rows the previous call's un-filtered INSERT already created),
+    # eventually violating the (organization, category, value) unique
+    # constraint. Found by reasoning through the manager chain, not by
+    # triggering the failure live.
+    all_objects = models.Manager()
+
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='form_options')
     category = models.CharField(max_length=50, choices=OPTION_CATEGORIES)
     value = models.CharField(max_length=100)
@@ -94,19 +104,50 @@ ENROLLMENT_TRANSITIONS = {
 class Student(models.Model):
     # Custom manager
     objects = StudentManager()
-    
+    # Phase C8: unfiltered bypass manager — StudentManager subclasses
+    # OrganizationManager (thread-local-filtered, empty for a central-auth
+    # request; see student_service/dual_auth.py's module docstring), and
+    # unlike with_deleted()/only_deleted() (both still route through
+    # super().get_queryset(), i.e. still org-filtered), Student had NO
+    # actual unfiltered manager at all before this phase (confirmed by
+    # reading — the C5-class hazard this phase's prompt explicitly warned
+    # about). Central-auth code paths use this + an explicit tenant_id
+    # filter (central_tenant_qs), never `.objects` directly.
+    all_objects = models.Manager()
+
     # --- User Account Link ---
     user = models.OneToOneField(
-        'users.User', 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='student_profile',
         help_text="User account associated with this student"
     )
-    
+    # Phase C8: THE identity link for central auth. Mirrors this student's
+    # central `NonStaffIdentity` (Phase B2), which is what a central-auth
+    # student token's own `user_id` claim equals. Populated OFFLINE, once,
+    # by `students/management/commands/remap_central_user_ids.py` — an
+    # EXACT match on `legacy_user_id` (== this row's local `user_id`),
+    # never a fuzzy one (name/email guessing). NULL means "not yet linked
+    # / no matching central identity" — reported, not invented (A3's rule).
+    # This is the field every central-auth self-service read/write in this
+    # service is scoped by (see students/views.py) — the core IDOR boundary
+    # for this whole phase.
+    central_user_id = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
+
     # --- Organization for Multi-tenant ---
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='students')
+    # Phase C8: tenant_id (stamped from a central-auth token's own claim,
+    # used to scope reads) + central_org_id (maps this row's local
+    # `users.Organization` to its central-auth Organization equivalent) —
+    # same mixin shape as C1-C7, applied inline here since Student is the
+    # only model in this service that needs it (see the FK audit table in
+    # docs/PHASE_C8_STUDENT_SERVICE_RESULT.md for why EnrollmentEvent/
+    # EnrollmentStatusRequest/EnrollmentSnapshot/behaviour/student_status
+    # models were handled differently or left alone).
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
     
     # --- Personal Details ---
     photo = models.ImageField(upload_to="students/photos/", null=True, blank=True)
@@ -689,6 +730,16 @@ class EnrollmentEvent(models.Model):
         'users.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='enrollment_events_created'
     )
+    # Phase C8: created_by is a real FK to users.User — the acting staff
+    # member (teacher/coordinator/principal/superadmin), not the student
+    # subject. Same reasoning as Student.central_user_id's docstring, but
+    # for "who did this" rather than "who this is about". No
+    # CentralAuthFieldsMixin/tenant_id here — this model has no
+    # `organization` field of its own (relies on the parent student's),
+    # and no OrganizationManager blind spot either (confirmed: this model
+    # uses Django's plain default manager, not OrganizationManager — no
+    # `all_objects` needed).
+    central_created_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -756,11 +807,17 @@ class EnrollmentStatusRequest(models.Model):
         'users.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='enrollment_status_requests_made'
     )
+    # Phase C8: requested_by/reviewed_by are real FKs to users.User — the
+    # acting staff member (teacher who requested, coordinator/principal who
+    # reviewed), not the student subject. Same reasoning as
+    # EnrollmentEvent.central_created_by_id above.
+    central_requested_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     reviewed_by = models.ForeignKey(
         'users.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='enrollment_status_requests_reviewed'
     )
+    central_reviewed_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     coordinator_response = models.TextField(
         blank=True, null=True, help_text="Coordinator's note on approve/reject"
     )
@@ -769,6 +826,11 @@ class EnrollmentStatusRequest(models.Model):
         'users.Organization', on_delete=models.CASCADE, null=True, blank=True,
         related_name='enrollment_status_requests'
     )
+    # Phase C8: same tenant/org mixin shape as Student's, applied inline
+    # (this model already has all_objects — OrganizationManager blind spot
+    # confirmed and worked around).
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)

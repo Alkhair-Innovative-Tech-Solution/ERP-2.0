@@ -72,7 +72,7 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["ams_shared.jwt.validator.ServiceJWTAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["student_service.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -105,6 +105,20 @@ INTERNAL_SERVICE_SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 
 CAMPUS_SERVICE_URL = os.getenv("CAMPUS_SERVICE_URL", "http://campus-service:8003")
+
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://host.docker.internal:8000")
+
+# Phase C8: read-only connection info for the auth-service's shared Postgres,
+# used ONLY by `students/management/commands/remap_central_user_ids.py` (an
+# offline batch tool, never touched at request time) to resolve
+# Student.central_user_id from auth_non_staff_identity.legacy_user_id — see
+# that command's docstring. Same host.docker.internal + published-port path
+# every SMS service already uses for AUTH_SERVICE_URL/JWKS; no new infra.
+CENTRAL_AUTH_DB_HOST = os.getenv("CENTRAL_AUTH_DB_HOST", "host.docker.internal")
+CENTRAL_AUTH_DB_PORT = os.getenv("CENTRAL_AUTH_DB_PORT", "5432")
+CENTRAL_AUTH_DB_NAME = os.getenv("CENTRAL_AUTH_DB_NAME", "auth_db")
+CENTRAL_AUTH_DB_USER = os.getenv("CENTRAL_AUTH_DB_USER", "erp_admin")
+CENTRAL_AUTH_DB_PASSWORD = os.getenv("CENTRAL_AUTH_DB_PASSWORD", "")
 
 SILENCED_SYSTEM_CHECKS = ["fields.E300", "fields.E307"]
 MIGRATION_MODULES = {"teachers": "teachers_student_migrations"}

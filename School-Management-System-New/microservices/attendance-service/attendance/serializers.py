@@ -244,7 +244,21 @@ class AttendanceSerializer(serializers.ModelSerializer):
     classroom_name = serializers.CharField(source='classroom.__str__', read_only=True)
     classroom_code = serializers.CharField(source='classroom.code', read_only=True)
     marked_by_name = serializers.SerializerMethodField()
-    student_attendance = StudentAttendanceSerializer(source='student_attendances', many=True, read_only=True)
+    # Phase C10: `source='student_attendances'` resolves via
+    # StudentAttendance's DEFAULT manager (`objects` = OrganizationManager),
+    # blind for central-auth (same reverse-FK-accessor hazard as
+    # Attendance.update_counts(), found live the same way — a serialized
+    # response showing `student_attendance: []` despite rows existing).
+    # SerializerMethodField + all_objects.filter(attendance=obj) instead —
+    # safe for both token types, `obj` already pins to one specific
+    # Attendance row (see update_counts()'s identical fix for the full
+    # reasoning).
+    student_attendance = serializers.SerializerMethodField()
+
+    def get_student_attendance(self, obj):
+        return StudentAttendanceSerializer(
+            StudentAttendance.all_objects.filter(attendance=obj), many=True
+        ).data
     is_weekend = serializers.SerializerMethodField()
     is_holiday = serializers.SerializerMethodField()
     display_status = serializers.SerializerMethodField()

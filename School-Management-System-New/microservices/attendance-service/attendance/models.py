@@ -201,7 +201,21 @@ class Attendance(CentralAuthFieldsMixin, models.Model):
     
     def update_counts(self):
         """Update attendance counts from student attendance records"""
-        student_attendances = self.student_attendances.all()
+        # Phase C10: the `self.student_attendances` reverse-FK accessor
+        # resolves through StudentAttendance's DEFAULT manager
+        # (`objects` = OrganizationManager), which is blind whenever the
+        # org context-var isn't populated — always true for a central-auth
+        # request (see attendance_service/dual_auth.py's module
+        # docstring). Found live: a central-auth mark_attendance call
+        # returned 201 but total_students=0 (StudentAttendance rows were
+        # created, but this accessor couldn't see them to count them).
+        # `all_objects.filter(attendance=self)` is safe for BOTH token
+        # types — `self` already pins the query to one specific Attendance
+        # row (and StudentAttendance.organization always mirrors
+        # self.attendance.organization per this model's own save()), so
+        # dropping the redundant org filter here cannot leak across a
+        # tenant/org boundary.
+        student_attendances = StudentAttendance.all_objects.filter(attendance=self)
         self.total_students = student_attendances.count()
         self.present_count = student_attendances.filter(status='present').count()
         self.absent_count = student_attendances.filter(status='absent').count()

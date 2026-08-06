@@ -29,6 +29,16 @@ INSTALLED_APPS = [
     "coordinator",
     "teachers",
     "students",
+    # Phase C10: vendored in the Dockerfile (COPY microservices/staff-service/
+    # principals/) same as coordinator/teachers, but never registered here —
+    # a pre-existing gap (confirmed against timetable-service's settings.py,
+    # which DOES register it) that breaks BOTH legacy and central-auth
+    # principal-tier code paths identically ("Model class principals.models
+    # .Principal doesn't declare an explicit app_label and isn't in an
+    # application in INSTALLED_APPS" — not a central-auth-specific bug,
+    # found live while proving this phase's 7-day edit window with a
+    # principal-tier resolution path).
+    "principals",
 ]
 
 AUTH_USER_MODEL = "users.User"

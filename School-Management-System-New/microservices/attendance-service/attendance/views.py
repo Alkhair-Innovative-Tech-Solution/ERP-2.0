@@ -429,7 +429,10 @@ def mark_attendance(request):
                 pass
 
             # Clear existing student attendance records
-            attendance.student_attendances.all().delete()
+            # Phase C10: reverse-FK accessor is blind for central-auth
+            # (StudentAttendance.objects is OrganizationManager-backed) —
+            # all_objects here, same fix as Attendance.update_counts().
+            StudentAttendance.all_objects.filter(attendance=attendance).delete()
 
             # Create new student attendance records
             for student_data in student_attendance_data:
@@ -733,7 +736,10 @@ def mark_bulk_attendance(request):
                 attendance.marked_by = marked_by_user
 
             # Clear existing student attendance records
-            attendance.student_attendances.all().delete()
+            # Phase C10: reverse-FK accessor is blind for central-auth
+            # (StudentAttendance.objects is OrganizationManager-backed) —
+            # all_objects here, same fix as Attendance.update_counts().
+            StudentAttendance.all_objects.filter(attendance=attendance).delete()
 
             # Create student attendance records
             for student_data in student_attendance_data:
@@ -1339,7 +1345,10 @@ def edit_attendance(request, attendance_id):
         student_manager = _student_manager_for_user(user)
         with transaction.atomic():
             # Clear existing student attendance records
-            attendance.student_attendances.all().delete()
+            # Phase C10: reverse-FK accessor is blind for central-auth
+            # (StudentAttendance.objects is OrganizationManager-backed) —
+            # all_objects here, same fix as Attendance.update_counts().
+            StudentAttendance.all_objects.filter(attendance=attendance).delete()
 
             # Create new student attendance records
             for student_data in student_attendance_data:

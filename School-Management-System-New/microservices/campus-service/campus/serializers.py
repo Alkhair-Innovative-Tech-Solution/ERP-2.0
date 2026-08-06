@@ -7,6 +7,10 @@ class CampusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Campus
         fields = "__all__"
+        # Phase C5: tenant_id/central_org_id are stamped server-side only
+        # (campus/views.py's perform_create) — never client-suppliable,
+        # same reasoning as every central_*_id field added in C1-C4.
+        read_only_fields = ["tenant_id", "central_org_id"]
 
     def to_internal_value(self, data):
         # When sent as multipart/form-data, grades_data arrives as a JSON string.

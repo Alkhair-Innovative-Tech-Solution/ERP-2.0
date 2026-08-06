@@ -3,6 +3,21 @@ from rest_framework import viewsets, decorators, response, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from .models import Campus
 from .serializers import CampusSerializer
+from central_auth.authentication import CentralAuthUser
+from campus_service.dual_auth import (
+    DualServiceSubscribed, DualRequiresPermission,
+    user_is_superadmin, get_org_and_tenant, central_tenant_qs,
+)
+
+# Phase C5 endpoint -> sms.* permission map (see
+# docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md). Central auth's catalog
+# (permissions.sms_catalog.SMS_PERMISSIONS, Phase B3) has no campus-shaped
+# permission at all — sms.campus.manage is referenced but NOT added from
+# this campus-service-scoped task, fail-closed: every non-superadmin
+# central-auth token 403s on campus writes. Reads (list/retrieve/summary/
+# facilities/active) are gated by DualServiceSubscribed only, matching
+# "endpoints requiring no special perm should work" from the C1-C4 recipe.
+CAMPUS_MANAGE_PERM = 'sms.campus.manage'
 
 
 def _publish_campus(routing_key, campus):
@@ -22,16 +37,37 @@ def _publish_campus(routing_key, campus):
 class CampusViewSet(viewsets.ModelViewSet):
     queryset = Campus.objects.all()
     serializer_class = CampusSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, DualServiceSubscribed]
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [permissions.IsAuthenticated(), DualServiceSubscribed(), DualRequiresPermission(CAMPUS_MANAGE_PERM)()]
+        return super().get_permissions()
 
     def _get_org(self):
-        """Return org object or None. Works for both DB users and stateless _TokenUser."""
+        """Return org object or None. Legacy path only — unchanged (same
+        two-fallback shape as before). Central-auth path uses
+        get_org_and_tenant() directly instead (see get_queryset/perform_create)."""
         from users.middleware import get_current_organization
         org = getattr(self.request.user, 'organization', None) or get_current_organization()
         return org
 
     def get_queryset(self):
         user = self.request.user
+        is_central = isinstance(user, CentralAuthUser)
+
+        if is_central:
+            # Campus.objects is OrganizationManager-backed — empty for a
+            # central-auth request (see campus_service/dual_auth.py's
+            # module docstring). No role/principal_type claim exists on
+            # CentralAuthUser yet (same gap flagged since B3/C1-C4), so the
+            # legacy role-based branches below (principal/coordinator see
+            # only their own campus) have no central-auth equivalent —
+            # every non-superadmin central-auth token sees every campus in
+            # its tenant, flagged in docs/PHASE_C5_CAMPUS_SERVICE_RESULT.md.
+            queryset = central_tenant_qs(Campus.all_objects.all(), user)
+            return queryset
+
         queryset = Campus.objects.all()
 
         if user.is_superadmin():
@@ -70,6 +106,22 @@ class CampusViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Auto-assign organization and enforce campus quota from plan."""
         user = self.request.user
+
+        if isinstance(user, CentralAuthUser):
+            # No local org_id/.organization on this token — stamp tenant_id
+            # instead, leave organization null (see C1's _get_org note).
+            # Quota enforcement (org.max_campuses) has no central-auth
+            # equivalent — Organization rows created via central-auth writes
+            # are never populated (organization=None throughout this dual-run
+            # recipe), so there's nothing to check a quota against here;
+            # flagged, not silently skipped.
+            if not user_is_superadmin(user):
+                _, tenant_id = get_org_and_tenant(user)
+                campus = serializer.save(organization=None, tenant_id=tenant_id)
+            else:
+                campus = serializer.save()
+            _publish_campus('campus.created', campus)
+            return
 
         if not user.is_superadmin():
             org = self._get_org()
@@ -138,6 +190,15 @@ class CampusViewSet(viewsets.ModelViewSet):
     # ✅ Custom endpoint: only active campuses
     @decorators.action(detail=False, methods=["get"])
     def active(self, request):
-        campuses = Campus.objects.filter(status="active")
+        # Legacy: unchanged — Campus.objects.filter(...) already relies on
+        # OrganizationManager's contextvar scoping (same as before, no
+        # role restriction applied here, unlike list()/get_queryset()).
+        # Central-auth: same blind spot as everywhere else in this module
+        # (Campus.objects is empty on this path) — central_tenant_qs instead.
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            campuses = central_tenant_qs(Campus.all_objects.filter(status="active"), user)
+        else:
+            campuses = Campus.objects.filter(status="active")
         serializer = self.get_serializer(campuses, many=True)
         return response.Response(serializer.data)

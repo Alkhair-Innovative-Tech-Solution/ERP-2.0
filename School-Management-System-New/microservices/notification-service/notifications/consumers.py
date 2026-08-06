@@ -1,8 +1,11 @@
 import json
+import jwt as pyjwt
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from ams_shared.jwt.validator import verify_token, _TokenUser
 from rest_framework.exceptions import AuthenticationFailed
+from central_auth.authentication import CentralAuthUser
+from central_auth.jwks import JWKSUnavailable, get_signing_key
 import psutil
 import asyncio
 import random
@@ -91,7 +94,45 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 }))
     
     async def authenticate_user(self, token):
-        """Authenticate user from JWT token using shared stateless validator."""
+        """Authenticate user from JWT token.
+
+        Phase C7 bonus fix: this only did HS256 (legacy) verification —
+        a central-auth RS256 token would fail `verify_token` entirely,
+        silently breaking real-time WebSocket delivery for central-auth
+        users. Routes on the token's own `alg` header, mirroring
+        notification_service.dual_auth.DualAuthentication's REST-layer
+        dispatch. Verified by code inspection only (no live WS test client
+        available for the C7 proof — see docs/PHASE_C7_NOTIFICATION_SERVICE_RESULT.md).
+
+        Note: authenticating successfully here does not yet mean a
+        central-auth user will actually RECEIVE anything — no code path in
+        this phase stamps Notification.central_recipient_id (see
+        AnnouncementViewSet._fan_out_notifications' fail-closed guard in
+        views.py), so their `user_{uuid}` channel group currently never
+        gets a group_send. This fix only removes the connection-level
+        failure; it doesn't (and structurally can't yet) deliver content.
+        """
+        try:
+            header = pyjwt.get_unverified_header(token)
+        except pyjwt.InvalidTokenError as e:
+            print(f"WebSocket authentication error: malformed token ({e})")
+            return None
+
+        if header.get('alg') == 'RS256':
+            try:
+                public_key = get_signing_key(header.get('kid'))
+                claims = pyjwt.decode(token, key=public_key, algorithms=['RS256'])
+                if claims.get('token_type') != 'access':
+                    print("WebSocket authentication error: not an access token")
+                    return None
+                return CentralAuthUser(claims)
+            except JWKSUnavailable as e:
+                print(f"WebSocket authentication error: signing key unavailable ({e})")
+                return None
+            except (pyjwt.InvalidTokenError, Exception) as e:
+                print(f"WebSocket authentication error: {e}")
+                return None
+
         try:
             payload = verify_token(token)
             return _TokenUser(payload)

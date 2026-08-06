@@ -130,7 +130,17 @@ def push_to_user(user, title, body="", url="/admin/notifications", tag=None):
 
 
 def create_notification(recipient, actor: Optional[settings.AUTH_USER_MODEL] = None, verb: str = '', target_text: str = '', data: dict = None):
-    """Helper to create a notification record and send via WebSocket."""
+    """Helper to create a notification record and send via WebSocket.
+
+    Phase C7: `recipient`/`actor` are assigned directly to real FK fields
+    (Notification.recipient/.actor), so both must always be `users.User`
+    instances/ids — never a CentralAuthUser. The one caller that could pass
+    a CentralAuthUser actor (AnnouncementViewSet._fan_out_notifications) now
+    guards against that case before ever reaching here (see
+    notifications/views.py) — no live path currently calls this with a
+    CentralAuthUser. Not made dual-safe itself, to avoid designing for a
+    call path that doesn't exist.
+    """
     if recipient is None:
         return
     if data is None:

@@ -188,6 +188,24 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         from .services import create_notification
         User = get_user_model()
 
+        if isinstance(actor, CentralAuthUser):
+            # Found during C7: users.User.objects (MultiTenantUserManager)
+            # returns UNFILTERED (all organizations, all tenants) when the
+            # OrganizationMiddleware thread-local is unset — which it always
+            # is for central-auth requests (the same blind spot flagged in
+            # every prior phase). users.User has no tenant_id/central_org_id
+            # column of its own (only per-service tenant-scoped models got
+            # one), so there is no reliable way to resolve "which local User
+            # rows belong to this token's tenant" here. Rather than fan out
+            # an in-app Notification to every user across every organization
+            # in the platform (a real cross-tenant isolation break), fail
+            # closed: skip in-app fan-out entirely for central-auth-authored
+            # announcements. The Announcement itself is still correctly
+            # tenant-scoped for readers via get_queryset/central_tenant_qs —
+            # only this secondary "auto-notify" convenience feature is
+            # affected. Flagged in docs/PHASE_C7_NOTIFICATION_SERVICE_RESULT.md.
+            return
+
         recipients = User.objects.filter(is_active=True)
         if announcement.organization_id:
             recipients = recipients.filter(organization_id=announcement.organization_id)
@@ -243,6 +261,13 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------------------------------
 # Web Push subscription endpoints
 # ---------------------------------------------------------------------------
+# vapid_public_key stays AllowAny, unchanged: it returns settings.
+# VAPID_PUBLIC_KEY, which is by design meant to be handed to ANY browser
+# client so it can set up a push subscription — that's how the Web Push
+# protocol works (only the VAPID PRIVATE key, never exposed here, is
+# secret). No data exposure, no mutation, no IDOR risk. Investigated per
+# the C7 prompt's explicit instruction to scrutinize the service's one
+# AllowAny endpoint; confirmed safe to leave as-is.
 @decorators.api_view(['GET'])
 @decorators.permission_classes([permissions.AllowAny])
 def vapid_public_key(request):
@@ -251,7 +276,7 @@ def vapid_public_key(request):
 
 
 @decorators.api_view(['POST'])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([permissions.IsAuthenticated, DualServiceSubscribed])
 def push_subscribe(request):
     data = request.data or {}
     endpoint = data.get('endpoint')
@@ -260,21 +285,36 @@ def push_subscribe(request):
     auth = keys.get('auth')
     if not endpoint or not p256dh or not auth:
         return response.Response({'detail': 'Invalid subscription'}, status=status.HTTP_400_BAD_REQUEST)
-    PushSubscription.objects.update_or_create(
-        endpoint=endpoint,
-        defaults={
-            'user_id': request.user.id,
+    user = request.user
+    # user_id is an IntegerField-backed FK to users.User — a CentralAuthUser's
+    # id is a UUID and can't be assigned there (PushSubscription.user is now
+    # nullable for exactly this reason — see notifications/models.py).
+    # central_user_id carries the central-auth identity instead.
+    if isinstance(user, CentralAuthUser):
+        defaults = {
+            'user_id': None,
+            'central_user_id': central_person_id(user),
             'p256dh': p256dh,
             'auth': auth,
             'user_agent': (request.META.get('HTTP_USER_AGENT') or '')[:300],
-        },
-    )
+        }
+    else:
+        defaults = {
+            'user_id': user.id,
+            'p256dh': p256dh,
+            'auth': auth,
+            'user_agent': (request.META.get('HTTP_USER_AGENT') or '')[:300],
+        }
+    PushSubscription.objects.update_or_create(endpoint=endpoint, defaults=defaults)
     return response.Response({'ok': True})
 
 
 @decorators.api_view(['POST'])
-@decorators.permission_classes([permissions.IsAuthenticated])
+@decorators.permission_classes([permissions.IsAuthenticated, DualServiceSubscribed])
 def push_unsubscribe(request):
+    # endpoint is an opaque, globally-unique browser-generated value — the
+    # lookup below never touches request.user, so no dual-safe change is
+    # needed here beyond gating the endpoint with DualServiceSubscribed.
     endpoint = (request.data or {}).get('endpoint')
     if endpoint:
         PushSubscription.objects.filter(endpoint=endpoint).delete()

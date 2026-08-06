@@ -32,8 +32,15 @@ class CentralAuthFieldsMixin(models.Model):
 
 
 class Notification(CentralAuthFieldsMixin, models.Model):
+    # Phase C7: widened to nullable — same reasoning as PushSubscription.user
+    # below. Without this, no row could ever be created for a central-auth
+    # recipient at all (recipient is required, and a CentralAuthUser can't
+    # be assigned to it), which would make central_recipient_id below
+    # permanently write-only. Found via a synthetic-data create attempt
+    # (NotNullViolation), not by inspection alone.
     recipient = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications'
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications'
     )
     # Phase C7: recipient/actor are real FKs to users.User — a
     # CentralAuthUser/central identity can't be assigned to them directly
@@ -127,8 +134,15 @@ class PushSubscription(models.Model):
     """A browser Web Push subscription for a user/device. Lets the backend
     deliver OS-level notifications even when the app/tab is closed."""
 
+    # Phase C7: widened to nullable — a central-auth subscriber has no
+    # `users.User` row to point this FK at (CentralAuthUser isn't one).
+    # `endpoint` is globally unique regardless of which user owns it, so
+    # nulling `user` doesn't reopen any uniqueness gap (unlike C1/C4's
+    # person+something composite-uniqueness cases). central_user_id (below)
+    # carries the central-auth identity instead.
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_subscriptions'
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='push_subscriptions'
     )
     # Phase C7: real FK to users.User — same reasoning as
     # Notification.central_recipient_id above. No CentralAuthFieldsMixin

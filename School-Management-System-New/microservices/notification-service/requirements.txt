@@ -18,4 +18,7 @@ pika
 Pillow
 psutil
 pywebpush
+# requests is already a transitive dep of pywebpush (confirmed present);
+# cryptography is new, needed for central_auth/jwks.py's RSA key parsing.
+cryptography==42.0.5
 ams-shared @ file:///app/ams-shared

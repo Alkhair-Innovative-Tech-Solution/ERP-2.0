@@ -9,20 +9,26 @@ token scheme; OrganizationMiddleware never populating its contextvars for
 central-auth requests, so any OrganizationManager-filtered `.objects`
 queryset silently returns empty on that path).
 
-Lives at the project-package level (not inside `timetable/` or
-`transfers/`) — same reasoning as C4-C8's project-level dual_auth.py,
-neither app is "primary".
+Lives at the project-package level (not inside `timetable/`) — same
+reasoning as C4-C8's project-level dual_auth.py (`timetable` and
+`transfers` are peer apps, neither "primary").
 
-timetable-service is a "normal" service (per the C9 prompt) — a couple of
-person-FKs (`teacher`, `created_by`) and one role gate (`IsPrincipal`).
-This service ALREADY avoids `.objects` (OrganizationManager) everywhere in
-its own view/serializer code, using `._base_manager`/`all_objects`
-directly with an explanatory comment ("subjects added via admin may have
-NULL organization" etc.) — the C5-class blind-spot lesson was independently
-learned here before this phase, just not yet tenant-filtered for
-central-auth. `principals` is vendored locally (Dockerfile-copied from
-staff-service, same as C3/C6/C8) for the dual `IsPrincipal` below — same
-local DB-match technique (email or employee_code) established in C3.
+Unlike C8 (student-service), this is a "normal" service per the prompt's
+own framing: no subject-identity resolution, just the usual actor-identity
+person-FKs (`teacher`, `created_by`) plus one role-gate (`IsPrincipal`).
+timetable-service already vendors `principals`/`teachers`/`coordinator`
+locally (Dockerfile-copied from staff-service, same as C3/C6/C8) — reused
+here for `find_principal`/`find_teacher`, same local DB-match technique
+(email or employee_code) established in C3.
+
+Note this service's views already avoid `.objects` (OrganizationManager)
+entirely in favor of `_base_manager`/`all_objects` even on the LEGACY
+path — a pre-existing pattern (`.objects` returns `.none()`/excludes
+NULL-org rows whenever the org context-var isn't populated, e.g. from a
+management command) unrelated to central-auth. This dual_auth.py's
+`central_tenant_qs` builds on top of that same `all_objects`-first
+convention, just adding an explicit tenant_id filter for the central-auth
+case rather than swapping managers.
 """
 import jwt
 from django.db.models import Q
@@ -105,14 +111,13 @@ def _find(model, user):
     timetable-service-scoped phase — no tenant_id column exists there
     yet), same residual gap flagged in C3/C4/C6/C8's dual_auth.py.
 
-    Guarded against the empty-string false-positive bug found live in
-    C8's own proof testing: a non-staff-shaped CentralAuthUser token (this
-    service has none today, but the guard is cheap and correct regardless)
-    has neither `employee_code` nor `email` claims set — `Q(email='') |
-    Q(employee_code='')` unguarded could match any row with a blank
-    email/employee_code. Only build a clause for a field that actually has
-    a non-empty value; require a staff-shaped token (`employee_id` claim
-    present) before querying at all."""
+    Guard against the empty-string false-positive bug found live in C8:
+    a non-staff CentralAuthUser (not relevant here — this service has no
+    NonStaffIdentity-shaped caller today, but the guard costs nothing and
+    keeps this helper correct if that ever changes) has neither `email`
+    nor `employee_code`/`employee_id` claims — `Q(email='') |
+    Q(employee_code='')` would otherwise match any row with a blank
+    email/employee_code."""
     if isinstance(user, CentralAuthUser) and not user.employee_id:
         return None
     manager = model._base_manager if isinstance(user, CentralAuthUser) else model.objects
@@ -138,14 +143,20 @@ def find_principal(user):
     return _find(Principal, user)
 
 
+def find_coordinator(user):
+    from coordinator.models import Coordinator
+    return _find(Coordinator, user)
+
+
 # ── dual IsPrincipal — legacy delegates to the ORIGINAL class unchanged ────
 
 class IsPrincipal(BasePermission):
     """Legacy: delegates to the original `users.permissions.IsPrincipal`
-    unchanged (`request.user.is_principal()`, works against `_TokenUser`
-    since `.role` is a plain attribute there). Central: resolvable via
-    find_principal (a local Principal DB match) — no role/principal_type
-    claim exists on CentralAuthUser yet (same gap flagged since B3)."""
+    unchanged (`request.user.is_principal()`, which `_TokenUser` supports
+    natively). Central: resolvable via find_principal (local DB match) or
+    the token's own is_superadmin claim — a superadmin should not be
+    locked out of a principal-gated write, same precedent as every prior
+    phase's dual role-classes bypassing on is_superadmin."""
 
     def has_permission(self, request, view):
         user = request.user
@@ -158,7 +169,8 @@ class IsPrincipal(BasePermission):
 
 def central_person_id(user):
     """The value to stamp into a central_*_id UUID column for the acting
-    user's own identity (e.g. created_by). None for a legacy token."""
+    user's own identity (e.g. ClassTimeTable.central_created_by_id). None
+    for a legacy token."""
     return user.id if isinstance(user, CentralAuthUser) else None
 
 

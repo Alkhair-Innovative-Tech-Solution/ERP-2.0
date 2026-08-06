@@ -69,7 +69,7 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["ams_shared.jwt.validator.ServiceJWTAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["support_service.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -98,6 +98,8 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 INTERNAL_SERVICE_SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://host.docker.internal:8000")
 
 SILENCED_SYSTEM_CHECKS = ["fields.E300", "fields.E307"]
 MIGRATION_MODULES = {"teachers": "teachers_support_migrations"}

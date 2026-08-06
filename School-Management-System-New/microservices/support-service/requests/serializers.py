@@ -54,9 +54,21 @@ class RequestComplaintDetailSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     
-    comments = RequestCommentSerializer(many=True, read_only=True)
-    status_history = RequestStatusHistorySerializer(many=True, read_only=True)
-    
+    comments = serializers.SerializerMethodField(read_only=True)
+    status_history = serializers.SerializerMethodField(read_only=True)
+
+    def get_comments(self, obj):
+        # obj.comments (reverse FK accessor) uses RequestComment.objects —
+        # OrganizationManager-backed, empty for a central-auth request (see
+        # support_service/dual_auth.py's module docstring) — same reverse-
+        # accessor blind spot C4 found with Submission. all_objects instead.
+        qs = RequestComment.all_objects.filter(request=obj).order_by('created_at')
+        return RequestCommentSerializer(qs, many=True).data
+
+    def get_status_history(self, obj):
+        qs = RequestStatusHistory.all_objects.filter(request=obj).order_by('-changed_at')
+        return RequestStatusHistorySerializer(qs, many=True).data
+
     def get_teacher_name(self, obj):
         """Return teacher name with employee code"""
         teacher = obj.teacher
@@ -99,29 +111,50 @@ class RequestComplaintCreateSerializer(serializers.ModelSerializer):
         # Ensure boolean fields are set to False explicitly to avoid DB null errors
         validated_data['requires_principal_approval'] = False
         validated_data['teacher_confirmed'] = False
-        
+
         # Set default priority if not provided
         if 'priority' not in validated_data:
             validated_data['priority'] = 'low'
-        
-        # Get teacher from request user
+
+        # Get teacher from request user. Dual-safe (see
+        # support_service/dual_auth.py's find_teacher — Teacher.objects is
+        # OrganizationManager-backed, empty for a central-auth request).
+        from central_auth.authentication import CentralAuthUser
+        from support_service.dual_auth import (
+            find_teacher, teacher_assigned_coordinators, get_org_and_tenant,
+            central_person_id,
+        )
         user = self.context['request'].user
-        try:
-            from teachers.models import Teacher
-            teacher = Teacher.objects.get(email=user.email)
-        except Teacher.DoesNotExist:
+        is_central = isinstance(user, CentralAuthUser)
+        teacher = find_teacher(user)
+        if not teacher:
             raise serializers.ValidationError("Teacher profile not found")
-        
-        # Get teacher's assigned coordinator
-        if not teacher.assigned_coordinators.exists():
+
+        # Get teacher's assigned coordinator. teacher.assigned_coordinators
+        # (a forward M2M) uses Coordinator.objects under the hood — same
+        # blind spot (see teacher_assigned_coordinators' docstring).
+        assigned = teacher_assigned_coordinators(teacher) if is_central else teacher.assigned_coordinators
+        if not assigned.exists():
             raise serializers.ValidationError("No coordinator assigned to this teacher")
-        
+
         # Get the first assigned coordinator (assuming one coordinator per teacher)
-        coordinator = teacher.assigned_coordinators.first()
-        
+        coordinator = assigned.first()
+
         validated_data['teacher'] = teacher
         validated_data['coordinator'] = coordinator
-        
+
+        if is_central:
+            # central_person_id(user) is this teacher's own central-auth
+            # id, exactly right for central_teacher_id since the teacher
+            # IS request.user here. central_coordinator_id can't be
+            # similarly derived — `coordinator` is a DIFFERENT person than
+            # request.user, and there's no local->central mapping for them
+            # available in this service (same class of gap as C3/C4/C5's
+            # flagged "assigned person" columns) — left unset, flagged.
+            _, tenant_id = get_org_and_tenant(user)
+            validated_data['tenant_id'] = tenant_id
+            validated_data['central_teacher_id'] = central_person_id(user)
+
         return super().create(validated_data)
 
 class RequestComplaintUpdateSerializer(serializers.ModelSerializer):
@@ -156,14 +189,15 @@ class RequestCommentCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         # Get user type from request user
+        from support_service.dual_auth import user_is_teacher, user_is_coordinator
         user = self.context['request'].user
-        if user.is_teacher():
+        if user_is_teacher(user):
             user_type = 'teacher'
-        elif user.is_coordinator():
+        elif user_is_coordinator(user):
             user_type = 'coordinator'
         else:
             raise serializers.ValidationError("Invalid user type")
-        
+
         validated_data['user_type'] = user_type
         validated_data['request'] = self.context['request_obj']
         

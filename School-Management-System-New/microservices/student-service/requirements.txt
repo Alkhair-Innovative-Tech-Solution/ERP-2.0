@@ -16,3 +16,5 @@ django-phonenumber-field[phonenumbers]
 ams-shared @ file:///app/ams-shared
 django-cleanup
 requests>=2.31.0
+# Phase C8: needed for central_auth/jwks.py's RSA key parsing.
+cryptography==42.0.5

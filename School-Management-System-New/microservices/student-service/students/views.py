@@ -29,8 +29,14 @@ def _get_teacher_classroom_ids(user):
       - campus_db.classes_classroom.class_teacher_id  → homeroom
       - timetable_db.timetable_teachertimetable        → all taught classes
     Returns the union (de-duplicated). Empty on error.
+
+    Phase C8: `user` may also be passed as a plain employee_code string
+    directly (used by the central-auth branch, which resolves a
+    CentralAuthUser to a local `teachers.Teacher` row first via
+    student_service.dual_auth.find_teacher, then passes its employee_code
+    here — this function itself is otherwise untouched).
     """
-    username = getattr(user, 'username', None)
+    username = user if isinstance(user, str) else getattr(user, 'username', None)
     if not username:
         return []
     import psycopg2
@@ -155,8 +161,11 @@ def _get_result_student_ids(user, role='teacher'):
     student moved classroom (e.g. promoted to Section E) or left. Joined by
     employee_code inside result_db so no cross-DB ID assumptions are needed.
     Empty list on any error.
+
+    Phase C8: `user` may also be a plain employee_code string — same
+    reasoning as `_get_teacher_classroom_ids` above.
     """
-    username = getattr(user, 'username', None)
+    username = user if isinstance(user, str) else getattr(user, 'username', None)
     if not username:
         return []
     if role == 'coordinator':
@@ -195,7 +204,12 @@ from rest_framework.views import APIView
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
-from users.permissions import IsSuperAdminOrPrincipal, IsTeacherOrAbove, IsCoordinatorOrAbove, HasDynamicPermission
+from student_service.dual_auth import (
+    IsSuperAdminOrPrincipal, IsTeacherOrAbove, IsCoordinatorOrAbove, HasDynamicPermission,
+    IsStudent, DualServiceSubscribed, find_student, find_teacher, find_coordinator,
+    central_person_id, central_tenant_qs, user_display_name,
+)
+from central_auth.authentication import CentralAuthUser
 from rest_framework.decorators import action
 from rest_framework import status
 from rest_framework.response import Response
@@ -206,50 +220,69 @@ from .filters import StudentFilter
 from teachers.models import Teacher
 
 from rest_framework.decorators import api_view, permission_classes
-from users.permissions import IsStudent
+
+# Phase C8: both self-service endpoints (and StudentViewSet's student
+# branch below) originally scoped identity via a raw QuerySet(Student)
+# string match on `student_id == request.user.username` — a legacy-only
+# concept (CentralAuthUser has no .username in that shape at all). The
+# central-auth branch here uses find_student(user) instead — an exact
+# central_user_id match (see student_service/dual_auth.py's module
+# docstring) — THE core IDOR boundary this whole phase is about: a
+# central-auth student token must resolve to its OWN Student row, never
+# another student's, and never guess via name/email if unmatched.
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated, IsStudent])
+@permission_classes([IsAuthenticated, IsStudent, DualServiceSubscribed])
 def student_upload_photo(request):
     """
     Student can upload/update their own profile photo.
     """
-    from django.db.models.query import QuerySet
-    try:
-        student = (
-            QuerySet(Student)
-            .get(student_id=request.user.username, is_deleted=False)
-        )
-        photo = request.FILES.get('photo')
-        if not photo:
-            return Response({'error': 'No photo provided'}, status=status.HTTP_400_BAD_REQUEST)
-        student.photo = photo
-        student.save(update_fields=['photo'])
-        photo_url = request.build_absolute_uri(student.photo.url) if student.photo else None
-        return Response({'photo': photo_url})
-    except Student.DoesNotExist:
+    user = request.user
+    if isinstance(user, CentralAuthUser):
+        student = find_student(user)
+    else:
+        from django.db.models.query import QuerySet
+        student = QuerySet(Student).filter(student_id=user.username, is_deleted=False).first()
+    if student is None:
         return Response({'error': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+    photo = request.FILES.get('photo')
+    if not photo:
+        return Response({'error': 'No photo provided'}, status=status.HTTP_400_BAD_REQUEST)
+    student.photo = photo
+    student.save(update_fields=['photo'])
+    photo_url = request.build_absolute_uri(student.photo.url) if student.photo else None
+    return Response({'photo': photo_url})
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsStudent])
+@permission_classes([IsAuthenticated, IsStudent, DualServiceSubscribed])
 def student_my_profile(request):
     """
     Student can view their own profile.
-    Uses raw QuerySet to bypass OrganizationManager filtering.
+    Legacy: raw QuerySet to bypass OrganizationManager filtering. Central:
+    find_student's exact central_user_id match (all_objects-backed) — see
+    module note above.
     """
-    from django.db.models.query import QuerySet
-    try:
-        # Bypass OrganizationManager — student can only see their own record
+    user = request.user
+    if isinstance(user, CentralAuthUser):
+        student = (
+            Student.all_objects
+            .select_related('campus', 'classroom', 'classroom__grade')
+            .filter(central_user_id=user.id, is_deleted=False)
+            .first()
+        )
+    else:
+        from django.db.models.query import QuerySet
         student = (
             QuerySet(Student)
             .select_related('campus', 'classroom', 'classroom__grade')
-            .get(student_id=request.user.username, is_deleted=False)
+            .filter(student_id=user.username, is_deleted=False)
+            .first()
         )
-        serializer = StudentSerializer(student, context={'request': request})
-        return Response(serializer.data)
-    except Student.DoesNotExist:
+    if student is None:
         return Response({'error': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+    serializer = StudentSerializer(student, context={'request': request})
+    return Response(serializer.data)
 
 
 class StudentPagination(PageNumberPagination):
@@ -324,7 +357,84 @@ class StudentViewSet(viewsets.ModelViewSet):
             'house_ownership',
         ] and self.request:
             user = self.request.user
-            
+
+            if isinstance(user, CentralAuthUser):
+                # `queryset` above was already built from Student.objects
+                # (StudentManager -> OrganizationManager — blind, empty for
+                # this token type; see student_service/dual_auth.py's
+                # module docstring). Rebuild from Student.all_objects +
+                # explicit tenant filter, reapplying the same stats/list
+                # default filters this branch would otherwise skip.
+                cqs = central_tenant_qs(Student.all_objects, user).filter(is_deleted=False).select_related('campus', 'classroom')
+                if self.action in {
+                    'gender_stats', 'campus_stats', 'grade_distribution', 'enrollment_trend',
+                    'mother_tongue_distribution', 'religion_distribution', 'age_distribution',
+                    'total_students', 'new_admissions_stats', 'zakat_status', 'house_ownership',
+                }:
+                    cqs = cqs.filter(is_active=True, classroom__isnull=False).exclude(current_grade__iexact='Alumni')
+                if self.action == 'list':
+                    query_params = self.request.query_params
+                    has_special_filter = any(param in query_params for param in [
+                        'campus', 'classroom', 'classroom__isnull', 'current_grade',
+                        'is_active', 'shift', 'section', 'level', 'search', 'is_new_admission'
+                    ])
+                    if not has_special_filter:
+                        cqs = cqs.filter(is_active=True, classroom__isnull=False).exclude(current_grade__iexact='Alumni')
+                    elif 'current_grade' in query_params and query_params.get('current_grade', '').lower() == 'alumni':
+                        pass
+                    elif 'is_active' not in query_params:
+                        cqs = cqs.exclude(current_grade__iexact='Alumni')
+
+                if user.is_superadmin:
+                    return cqs
+
+                # Person-tier resolution — see student_service/dual_auth.py.
+                # `admin`/`org_admin` have no local table/claim to resolve
+                # against (same gap flagged since B3) — FLAGGED, falls
+                # through to `cqs.none()` below rather than guessed at.
+                principal = find_principal(user)
+                if principal is not None:
+                    if principal.campus_id:
+                        return cqs.filter(campus_id=principal.campus_id)
+                    return cqs
+
+                teacher = find_teacher(user)
+                if teacher is not None:
+                    classroom_ids = _get_teacher_classroom_ids(teacher.employee_code)
+                    result_student_ids = _get_result_student_ids(teacher.employee_code, role='teacher')
+                    if classroom_ids or result_student_ids:
+                        return cqs.filter(
+                            Q(classroom_id__in=classroom_ids) | Q(id__in=result_student_ids)
+                        ).distinct()
+                    return cqs.none()
+
+                coordinator = find_coordinator(user)
+                if coordinator is not None:
+                    if coordinator.shift == 'both' and coordinator.assigned_levels.exists():
+                        level_ids = list(coordinator.assigned_levels.values_list('id', flat=True))
+                    elif coordinator.level_id:
+                        level_ids = [coordinator.level_id]
+                    else:
+                        level_ids = []
+                    result_student_ids = _get_result_student_ids(coordinator.employee_code, role='coordinator')
+                    if not level_ids and not result_student_ids:
+                        return cqs.none()
+                    from classes.models import ClassRoom
+                    coordinator_classrooms = ClassRoom.all_objects.filter(
+                        grade__level__in=level_ids or []
+                    ).values_list('id', flat=True)
+                    return cqs.filter(
+                        Q(classroom__in=coordinator_classrooms) | Q(id__in=result_student_ids)
+                    ).distinct()
+
+                student = find_student(user)
+                if student is not None:
+                    # The core self-service IDOR boundary, same as
+                    # student_my_profile — exact central_user_id match.
+                    return cqs.filter(central_user_id=user.id)
+
+                return cqs.none()
+
             if user.is_superadmin():
                 return queryset
                 
@@ -403,21 +513,79 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_object(self):
         """Override to handle individual student retrieval with proper permissions"""
+        user = self.request.user
+
         # For destroy action, we need to get the object even if it's soft deleted
         # So we use with_deleted() to bypass the manager's default filter
         if self.action == 'destroy':
-            # Get object using with_deleted() to allow deleting already soft-deleted items if needed
             lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
             lookup_value = self.kwargs[lookup_url_kwarg]
             filter_kwargs = {self.lookup_field: lookup_value}
-            obj = Student.objects.with_deleted().get(**filter_kwargs)
+            if isinstance(user, CentralAuthUser):
+                # Student.objects.with_deleted() is StudentManager/
+                # OrganizationManager-backed — blind for this token type.
+                # all_objects bypasses it; tenant isolation is enforced
+                # explicitly right below instead of relying on the manager.
+                from django.http import Http404
+                obj = Student.all_objects.filter(**filter_kwargs).first()
+                if obj is None:
+                    raise Http404
+                if not user.is_superadmin and obj.tenant_id and obj.tenant_id != user.tenant_id:
+                    raise Http404
+            else:
+                obj = Student.objects.with_deleted().get(**filter_kwargs)
         else:
-            # For other actions, use normal queryset (excludes deleted)
+            # For other actions, use normal queryset (excludes deleted) —
+            # already dual-safe (see get_queryset above), so a CentralAuthUser
+            # student/teacher/coordinator/principal is already correctly
+            # scoped by the time we get here.
             obj = super().get_object()
-        
-        # Apply role-based access control for individual objects
-        user = self.request.user
-        
+
+        if isinstance(user, CentralAuthUser):
+            # Re-validated per-object, same shape as the legacy block below
+            # (get_queryset already scoped `obj` for retrieve/update, but
+            # destroy's raw fetch above didn't — this re-check covers both
+            # uniformly, mirroring the legacy code's own belt-and-suspenders
+            # structure).
+            if user.is_superadmin:
+                return obj
+            principal = find_principal(user)
+            if principal is not None:
+                if principal.campus_id and obj.campus_id != principal.campus_id:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied("You don't have permission to view this student.")
+                return obj
+            teacher = find_teacher(user)
+            if teacher is not None:
+                classroom_ids = _get_teacher_classroom_ids(teacher.employee_code)
+                result_student_ids = _get_result_student_ids(teacher.employee_code, role='teacher')
+                if classroom_ids and obj.classroom_id not in classroom_ids and obj.id not in result_student_ids:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied("You don't have permission to view this student.")
+                return obj
+            coordinator = find_coordinator(user)
+            if coordinator is not None:
+                if coordinator.shift == 'both' and coordinator.assigned_levels.exists():
+                    level_ids = list(coordinator.assigned_levels.values_list('id', flat=True))
+                elif coordinator.level_id:
+                    level_ids = [coordinator.level_id]
+                else:
+                    level_ids = []
+                result_student_ids = _get_result_student_ids(coordinator.employee_code, role='coordinator')
+                student_level_id = obj.classroom.grade.level_id if (obj.classroom_id and obj.classroom.grade_id) else None
+                if level_ids and student_level_id and student_level_id not in level_ids and obj.id not in result_student_ids:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied("You don't have permission to view this student.")
+                return obj
+            # Student tier: obj is already central_user_id-scoped by
+            # get_queryset for non-destroy actions; re-check explicitly here
+            # too since destroy's raw fetch above bypasses get_queryset —
+            # the actual IDOR boundary this whole phase is about.
+            if obj.central_user_id != user.id:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("You don't have permission to view this student.")
+            return obj
+
         if user.is_teacher():
             # Teacher: Check if student is in their assigned classrooms
             from teachers.models import Teacher

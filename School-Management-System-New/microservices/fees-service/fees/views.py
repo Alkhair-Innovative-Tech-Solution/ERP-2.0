@@ -11,31 +11,69 @@ from .serializers import (
     ChallanGenerationSerializer, BankAccountSerializer, PaymentTransactionSerializer
 )
 from .services import FeeService
-from users.permissions import HasDynamicPermission
+from central_auth.authentication import CentralAuthUser
+from .dual_auth import (
+    DualHasDynamicPermission as HasDynamicPermission,
+    DualServiceSubscribed,
+    DualRequiresPermission,
+    user_is_superadmin,
+    user_role,
+    user_display_name,
+)
+
+# Phase C2 endpoint -> sms.* permission map (full table + flagged catalog
+# gap in docs/PHASE_C2_FEES_SERVICE_RESULT.md):
+#   read-only endpoints gated by required_permission='view_fees'  -> sms.fee.view (EXISTS)
+#   write endpoints gated by required_permission='manage_fees'    -> sms.fee.manage (FLAGGED, not in catalog)
+#   PaymentTransactionViewSet.submit (student self-service payment) -> sms.fee.pay (EXISTS) — added below
+# See fees/dual_auth.py's REQUIRED_PERMISSION_TO_SMS_CODENAME for the map
+# used by 'manage_fees'/'view_fees'-gated views (DualHasDynamicPermission).
+
+
+def _central_tenant_qs(base_manager, user):
+    """Central-auth read path for models with their own tenant_id (BankAccount,
+    FeeType, FeeStructure, StudentFee) — NOT the OrganizationManager-backed
+    `objects` default (see dual_auth.py's module docstring / C1's finding:
+    OrganizationMiddleware never populates its contextvars for central-auth
+    requests, so `objects` would silently go empty)."""
+    qs = base_manager.get_queryset() if hasattr(base_manager, 'get_queryset') else base_manager.all()
+    if user_is_superadmin(user):
+        return qs
+    if not user.tenant_id:
+        return qs.none()
+    return qs.filter(Q(tenant_id=user.tenant_id) | Q(tenant_id__isnull=True))
+
 
 class FeeTypeViewSet(viewsets.ModelViewSet):
     queryset = FeeType.objects.all()
     serializer_class = FeeTypeSerializer
-    permission_classes = [IsAuthenticated, HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, HasDynamicPermission]
     required_permission = 'manage_fees'
     filterset_fields = ['frequency', 'is_default', 'is_active']
 
     def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return FeeType.objects.none()
+        if isinstance(user, CentralAuthUser):
+            return _central_tenant_qs(FeeType._base_manager, user)
+
         from users.middleware import get_current_organization
-        from django.db import models
         org = get_current_organization()
         # Use _base_manager.get_queryset() to bypass the OrganizationManager's automatic .none() filter
         qs = FeeType._base_manager.get_queryset()
-        if not self.request.user.is_authenticated:
-            return FeeType.objects.none()
-        if self.request.user.is_superadmin():
+        if user_is_superadmin(user):
             return qs
         if org:
             # Show records for current org OR global defaults (isnull)
-            return qs.filter(models.Q(organization=org) | models.Q(organization__isnull=True))
+            return qs.filter(Q(organization=org) | Q(organization__isnull=True))
         return FeeType.objects.none()
 
     def perform_create(self, serializer):
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            serializer.save(tenant_id=user.tenant_id)
+            return
         from users.middleware import get_current_organization
         org = get_current_organization()
         if org:
@@ -49,18 +87,21 @@ class FeeTypeViewSet(viewsets.ModelViewSet):
 class FeeStructureViewSet(viewsets.ModelViewSet):
     queryset = FeeStructure.objects.all().prefetch_related('line_items')
     serializer_class = FeeStructureSerializer
-    permission_classes = [IsAuthenticated, HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, HasDynamicPermission]
     required_permission = 'manage_fees'
     filterset_fields = ['campus', 'level', 'grade', 'is_active', 'is_default']
 
     def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return FeeStructure.objects.none()
+        if isinstance(user, CentralAuthUser):
+            return _central_tenant_qs(FeeStructure._base_manager, user).prefetch_related('line_items')
+
         from users.middleware import get_current_organization
-        from django.db import models
         org = get_current_organization()
         qs = FeeStructure._base_manager.get_queryset().prefetch_related('line_items')
-        if not self.request.user.is_authenticated:
-            return FeeStructure.objects.none()
-        if self.request.user.is_superadmin():
+        if user_is_superadmin(user):
             return qs
         if org:
             # Show records for current org only
@@ -78,6 +119,10 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            serializer.save(tenant_id=user.tenant_id)
+            return
         from users.middleware import get_current_organization
         org = get_current_organization()
         if org:
@@ -88,7 +133,7 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
 class StudentFeeViewSet(viewsets.ModelViewSet):
     queryset = StudentFee.objects.all().select_related('student', 'fee_structure').prefetch_related('payments__received_by')
     serializer_class = StudentFeeSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
     filterset_fields = ['student', 'student__campus', 'month', 'year', 'status']
     search_fields = ['invoice_number', 'student__name', 'student__student_code']
 
@@ -101,27 +146,35 @@ class StudentFeeViewSet(viewsets.ModelViewSet):
         """
         from rest_framework.permissions import SAFE_METHODS
         if self.request.method in SAFE_METHODS:
-            return [IsAuthenticated()]
+            return [IsAuthenticated(), DualServiceSubscribed()]
         perm = HasDynamicPermission()
         perm.required_permission = 'manage_fees'
-        return [IsAuthenticated(), perm]
+        return [IsAuthenticated(), DualServiceSubscribed(), perm]
 
 
     def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return StudentFee.objects.none()
+
+        # If a specific student_id is requested, bypass org/tenant filter to
+        # avoid mismatch issues (fee org vs request org). The student's own
+        # record is already access-controlled at the StudentViewSet level.
+        student_id = self.request.query_params.get('student_id')
+        if student_id:
+            return StudentFee._base_manager.get_queryset().select_related('student', 'fee_structure').prefetch_related('payments__received_by').filter(student_id=student_id)
+
+        if isinstance(user, CentralAuthUser):
+            qs = _central_tenant_qs(StudentFee._base_manager, user).select_related('student', 'fee_structure').prefetch_related('payments__received_by')
+            # No role/person_type claim on central-auth tokens yet (see
+            # dual_auth.py's user_role() note) — campus-scoping below is
+            # legacy-only, skipped here rather than guessed at.
+            return qs
+
         from users.middleware import get_current_organization
         org = get_current_organization()
         qs = StudentFee._base_manager.get_queryset().select_related('student', 'fee_structure').prefetch_related('payments__received_by')
-        if not self.request.user.is_authenticated:
-            return StudentFee.objects.none()
-
-        # If a specific student_id is requested, bypass org filter to avoid
-        # org mismatch issues (fee org vs request org). The student's own record
-        # is already access-controlled at the StudentViewSet level.
-        student_id = self.request.query_params.get('student_id')
-        if student_id:
-            return qs.filter(student_id=student_id)
-
-        if self.request.user.is_superadmin():
+        if user_is_superadmin(user):
             pass # Keep full qs
         elif org:
             qs = qs.filter(organization=org)
@@ -130,8 +183,8 @@ class StudentFeeViewSet(viewsets.ModelViewSet):
 
         # Campus-scoped office staff (Accountant / Receptionist / Auditor) only
         # see fee records of students at their assigned campus.
-        user = self.request.user
-        if user.role in ('accounts_officer', 'admissions_counselor', 'compliance_officer'):
+        role = user_role(user)
+        if role in ('accounts_officer', 'admissions_counselor', 'compliance_officer'):
             campus = getattr(user, 'campus', None)
             if campus:
                 qs = qs.filter(student__campus=campus)
@@ -139,6 +192,10 @@ class StudentFeeViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            serializer.save(tenant_id=user.tenant_id)
+            return
         from users.middleware import get_current_organization
         org = get_current_organization()
         if org:
@@ -158,25 +215,35 @@ class StudentFeeViewSet(viewsets.ModelViewSet):
 class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all().select_related('student_fee__student', 'received_by')
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated, HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, HasDynamicPermission]
     required_permission = 'manage_fees'
 
     def get_queryset(self):
+        user = self.request.user
+        qs = Payment.objects.all().select_related('student_fee__student', 'received_by')
+        if not user.is_authenticated:
+            return Payment.objects.none()
+
+        if isinstance(user, CentralAuthUser):
+            if user_is_superadmin(user):
+                return qs
+            if not user.tenant_id:
+                return Payment.objects.none()
+            return qs.filter(Q(student_fee__tenant_id=user.tenant_id) | Q(student_fee__tenant_id__isnull=True))
+
+        if user_is_superadmin(user):
+            return qs
+
         from users.middleware import get_current_organization
         org = get_current_organization()
-        qs = Payment.objects.all().select_related('student_fee__student', 'received_by')
-        if not self.request.user.is_authenticated:
-            return Payment.objects.none()
-        if self.request.user.is_superadmin():
-            return qs
         if org:
             qs = qs.filter(student_fee__organization=org)
         else:
             return Payment.objects.none()
 
         # Campus-scoped office staff only see payments for their campus.
-        user = self.request.user
-        if user.role in ('accounts_officer', 'admissions_counselor', 'compliance_officer'):
+        role = user_role(user)
+        if role in ('accounts_officer', 'admissions_counselor', 'compliance_officer'):
             campus = getattr(user, 'campus', None)
             if campus:
                 qs = qs.filter(student_fee__student__campus=campus)
@@ -193,17 +260,30 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 'transaction_id': data.get('transaction_id'),
                 'deposit_date': data.get('deposit_date'),
             }
-        
+
+        user = self.request.user
+        is_central = isinstance(user, CentralAuthUser)
+        # NOTE (flagged, not fully closed here): data['student_fee'] was
+        # resolved by the serializer's own PrimaryKeyRelatedField, which
+        # still queries StudentFee.objects (OrganizationManager-filtered) —
+        # for a central-auth request this could 400 at validation time
+        # before reaching this method at all, same root cause as
+        # CashPaymentView's fix above. CashPaymentView (raw challan_id, no
+        # DRF FK field) is the one proven end-to-end for Phase C2; this
+        # path's serializer-level resolution is a known follow-up, see
+        # docs/PHASE_C2_FEES_SERVICE_RESULT.md.
         FeeService.record_payment(
             student_fee_id=data['student_fee'].id,
             amount=data['amount'],
             method=data['method'],
-            received_by=self.request.user,
-            bank_details=bank_details
+            received_by=None if is_central else user,
+            central_user_id=user.id if is_central else None,
+            bank_details=bank_details,
+            student_fee=data['student_fee'] if is_central else None,
         )
 
 class GenerateChallansView(views.APIView):
-    permission_classes = [IsAuthenticated, HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, HasDynamicPermission]
     required_permission = 'manage_fees'
 
     def post(self, request):
@@ -229,19 +309,28 @@ class GenerateChallansView(views.APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class FeeReportCollectionView(views.APIView):
-    permission_classes = [IsAuthenticated, HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, HasDynamicPermission]
     required_permission = 'view_fees'
 
     def get(self, request):
-        from users.middleware import get_current_organization
         from django.db.models import Sum, Q, Case, When, Value, CharField, F
         from django.utils import timezone
         import calendar
         from decimal import Decimal
-        
-        org = get_current_organization()
-        if not org:
-            return Response({"error": "No organization found"}, status=400)
+
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            if not user.tenant_id:
+                return Response({"error": "No tenant found"}, status=400)
+            base_qs = StudentFee._base_manager.filter(
+                Q(tenant_id=user.tenant_id) | Q(tenant_id__isnull=True)
+            )
+        else:
+            from users.middleware import get_current_organization
+            org = get_current_organization()
+            if not org:
+                return Response({"error": "No organization found"}, status=400)
+            base_qs = StudentFee._base_manager.filter(organization=org)
 
         # Default to current month/year if not provided
         now = timezone.now()
@@ -254,20 +343,18 @@ class FeeReportCollectionView(views.APIView):
         y_from = to_int(request.query_params.get('year_from'))
         m_to = to_int(request.query_params.get('month_to'))
         y_to = to_int(request.query_params.get('year_to'))
-        
+
         campus_id = request.query_params.get('campus_id')
         grade_id = request.query_params.get('grade_id')
 
         # Campus-scoped office staff (Accountant / Receptionist / Auditor) are
         # locked to their own campus regardless of any campus_id they request.
-        user = request.user
-        if user.role in ('accounts_officer', 'admissions_counselor', 'compliance_officer'):
+        # (Legacy-only — no role/person_type claim on central-auth tokens yet.)
+        role = user_role(user)
+        if role in ('accounts_officer', 'admissions_counselor', 'compliance_officer'):
             user_campus = getattr(user, 'campus', None)
             if user_campus:
                 campus_id = user_campus.id
-
-        # Base Query limited by Organization
-        base_qs = StudentFee._base_manager.filter(organization=org)
 
         # Scope every metric (summary, trend and list) to the campus so a
         # campus accountant sees only their campus' collection numbers.
@@ -302,7 +389,7 @@ class FeeReportCollectionView(views.APIView):
             other_sum=Sum('other_charges'),
             paid_sum=Sum('paid_amount')
         )
-        
+
         total_expected = (metrics['total_sum'] or Decimal('0.00')) + \
                          (metrics['late_sum'] or Decimal('0.00')) + \
                          (metrics['other_sum'] or Decimal('0.00'))
@@ -316,10 +403,10 @@ class FeeReportCollectionView(views.APIView):
             total_months = (now.year * 12 + now.month - 1) - i
             y_idx = total_months // 12
             m_idx = (total_months % 12) + 1
-            
+
             month_label = calendar.month_name[m_idx][:3]
             year_label = str(y_idx)[-2:] # show short year if needed? No, sticking to month label mainly.
-            
+
             t_qs = base_qs.filter(month=m_idx, year=y_idx)
             t_metrics = t_qs.aggregate(
                 t_exp=Sum('total_amount'),
@@ -327,12 +414,12 @@ class FeeReportCollectionView(views.APIView):
                 t_oth=Sum('other_charges'),
                 t_paid=Sum('paid_amount')
             )
-            
+
             t_exp = (t_metrics['t_exp'] or Decimal('0.00')) + \
                     (t_metrics['t_lt'] or Decimal('0.00')) + \
                     (t_metrics['t_oth'] or Decimal('0.00'))
             t_coll = t_metrics['t_paid'] or Decimal('0.00')
-            
+
             display_label = f"{month_label} '{year_label}"
             trend_data.append({
                 "name": display_label,
@@ -342,7 +429,7 @@ class FeeReportCollectionView(views.APIView):
 
         # 3. Student Wise List
         student_list = summary_qs.values(
-            'student_id', 
+            'student_id',
             student_name=F('student__name'),
             student_code=F('student__student_id')
         ).annotate(
@@ -374,23 +461,30 @@ class BankAccountViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         from rest_framework.permissions import SAFE_METHODS
         if self.request.method in SAFE_METHODS:
-            return [IsAuthenticated()]
+            return [IsAuthenticated(), DualServiceSubscribed()]
         perm = HasDynamicPermission()
         perm.required_permission = 'manage_fees'
-        return [IsAuthenticated(), perm]
+        return [IsAuthenticated(), DualServiceSubscribed(), perm]
 
     def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return BankAccount.objects.none()
+        if isinstance(user, CentralAuthUser):
+            return _central_tenant_qs(BankAccount._base_manager, user)
+        if user_is_superadmin(user):
+            return BankAccount.objects.all()
         from users.middleware import get_current_organization
         org = get_current_organization()
-        if not self.request.user.is_authenticated:
-            return BankAccount.objects.none()
-        if self.request.user.is_superadmin():
-            return BankAccount.objects.all()
         if org:
             return BankAccount.objects.filter(organization=org)
         return BankAccount.objects.none()
 
     def perform_create(self, serializer):
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            serializer.save(tenant_id=user.tenant_id)
+            return
         from users.middleware import get_current_organization
         org = get_current_organization()
         serializer.save(organization=org)
@@ -408,28 +502,38 @@ class PaymentTransactionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     Student submits payment proof; officer verifies.
     """
     serializer_class = PaymentTransactionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
     filterset_fields = ['status', 'student', 'challan']
     ordering_fields = ['submitted_at', 'verified_at', 'amount']
     ordering = ['-submitted_at']
 
     def get_queryset(self):
-        from users.middleware import get_current_organization
-        org = get_current_organization()
+        user = self.request.user
         qs = PaymentTransaction.objects.select_related(
             'student', 'challan', 'bank_account', 'verified_by'
         )
-        if not self.request.user.is_authenticated:
+        if not user.is_authenticated:
             return PaymentTransaction.objects.none()
-        if self.request.user.is_superadmin():
+        if isinstance(user, CentralAuthUser):
+            if user_is_superadmin(user):
+                return qs
+            if not user.tenant_id:
+                return PaymentTransaction.objects.none()
+            return qs.filter(Q(challan__tenant_id=user.tenant_id) | Q(challan__tenant_id__isnull=True))
+        if user_is_superadmin(user):
             return qs
+        from users.middleware import get_current_organization
+        org = get_current_organization()
         if org:
             return qs.filter(challan__organization=org)
         return PaymentTransaction.objects.none()
 
-    @action(detail=False, methods=['post'], url_path='submit')
+    @action(detail=False, methods=['post'], url_path='submit', permission_classes=[IsAuthenticated, DualServiceSubscribed, DualRequiresPermission('sms.fee.pay')])
     def submit(self, request):
-        """Student submits bank transfer proof for a challan."""
+        """Student submits bank transfer proof for a challan.
+        DualRequiresPermission('sms.fee.pay') only enforces for central-auth
+        tokens (sms.fee.pay exists in the catalog, Phase B3) — legacy tokens
+        keep the original IsAuthenticated-only gate, unchanged."""
         challan_id = request.data.get('challan_id')
         bank_account_id = request.data.get('bank_account_id')
         transaction_id = request.data.get('transaction_id', '').strip()
@@ -499,7 +603,11 @@ class PaymentTransactionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        txn.verified_by = request.user
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            txn.central_verified_by_id = user.id
+        else:
+            txn.verified_by = user
         txn.verified_at = tz.now()
 
         if action_type == 'approve':
@@ -542,7 +650,7 @@ class CashPaymentView(views.APIView):
     Officer sends: challan_id, student_id, amount
     System adds:   payment_method=cash, received_by=request.user, paid_at=now
     """
-    permission_classes = [IsAuthenticated, HasDynamicPermission]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed, HasDynamicPermission]
     required_permission = 'manage_fees'
 
     def post(self, request):
@@ -557,16 +665,32 @@ class CashPaymentView(views.APIView):
 
         try:
             now = timezone.now()
+            user = request.user
+            is_central = isinstance(user, CentralAuthUser)
+
+            verified_student_fee = None
+            if is_central:
+                # StudentFee.objects (OrganizationManager) goes empty for
+                # central-auth requests (see services.py's record_payment
+                # docstring) — pre-fetch + tenant-verify here, same filter
+                # views.py's get_querysets use, before the service ever runs.
+                verified_student_fee = _central_tenant_qs(StudentFee._base_manager, user).filter(id=int(challan_id)).first()
+                if not verified_student_fee:
+                    return Response(
+                        {'success': False, 'error': 'Challan not found.'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
             payment = FeeService.record_payment(
                 student_fee_id=int(challan_id),
                 amount=amount,
                 method='cash',
-                received_by=request.user,
+                received_by=None if is_central else user,
+                central_user_id=user.id if is_central else None,
+                student_fee=verified_student_fee,
             )
             fee = payment.student_fee
-            officer_name = (
-                request.user.get_full_name().strip() or request.user.username
-            )
+            officer_name = user_display_name(user)
 
             return Response({
                 'success': True,

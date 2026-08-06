@@ -53,8 +53,15 @@ class SubmissionGradeSerializer(serializers.ModelSerializer):
         instance.graded_at = timezone.now()
         request = self.context.get('request')
         if request and request.user:
-            instance.graded_by_id = request.user.id
-            instance.graded_by_name = request.user.username
+            # Phase C4: request.user.id is a UUID for a CentralAuthUser —
+            # can't go in graded_by_id (IntegerField). See
+            # subject_service/dual_auth.py's legacy_person_id/central_person_id.
+            from central_auth.authentication import CentralAuthUser
+            from subject_service.dual_auth import legacy_person_id, central_person_id, user_display_name
+            user = request.user
+            instance.graded_by_id = legacy_person_id(user)
+            instance.central_graded_by_id = central_person_id(user)
+            instance.graded_by_name = user_display_name(user)
         instance.save()
         return instance
 
@@ -92,15 +99,26 @@ class AssignmentSerializer(serializers.ModelSerializer):
 
     def get_my_submission(self, obj):
         request = self.context.get('request')
-        if request and request.user and request.user.role == 'student':
-            sub = obj.submissions.filter(student_id=request.user.id).first()
-            if sub:
-                return {
-                    'id': sub.id,
-                    'status': sub.status,
-                    'grade': sub.grade,
-                    'submitted_at': sub.submitted_at,
-                }
+        if not (request and request.user):
+            return None
+        from central_auth.authentication import CentralAuthUser
+        from subject_service.dual_auth import user_role
+        user = request.user
+        if user_role(user) != 'student':
+            return None
+        # request.user.id is a UUID for a CentralAuthUser — student_id
+        # (IntegerField) can't hold it; central_student_id does instead.
+        if isinstance(user, CentralAuthUser):
+            sub = Submission.all_objects.filter(assignment=obj, central_student_id=user.id).first()
+        else:
+            sub = obj.submissions.filter(student_id=user.id).first()
+        if sub:
+            return {
+                'id': sub.id,
+                'status': sub.status,
+                'grade': sub.grade,
+                'submitted_at': sub.submitted_at,
+            }
         return None
 
 

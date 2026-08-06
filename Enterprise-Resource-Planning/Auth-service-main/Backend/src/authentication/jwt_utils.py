@@ -58,6 +58,7 @@ def generate_access_token(user, **kwargs) -> str:
     should call the employees API.
     """
     is_superadmin = getattr(user, 'is_superadmin', False)
+    principal_type = _detect_principal_type(user)
 
     payload = {
         'user_id': str(user.id),
@@ -73,22 +74,54 @@ def generate_access_token(user, **kwargs) -> str:
         'jti': str(uuid.uuid4()),
     }
 
+    # Existing employee/superadmin detection — kept exactly as-is (untouched
+    # by the fix below, so an employee token's claim set is byte-identical).
     if hasattr(user, 'employee_code'):
         payload.update({
             'employee_code': user.employee_code,
             'employee_id': getattr(user, 'employee_id', None),
         })
+    elif principal_type == 'non_staff':
+        # Mirrors the employee_code/employee_id block above, minus the
+        # employee-only fields — a student (NonStaffIdentity) has no
+        # employee_code/employee_id, only identity_code/person_type.
+        payload.update({
+            'identity_code': getattr(user, 'identity_code', None),
+            'person_type': getattr(user, 'person_type', None),
+        })
 
-    payload.update(_build_authz_claims(user, is_superadmin))
+    payload.update(_build_authz_claims(user, is_superadmin, principal_type))
 
     payload.update(kwargs)
     return jwt.encode(payload, JWT_PRIVATE_KEY, algorithm=JWT_ALGORITHM)
 
 
-def _build_authz_claims(user, is_superadmin: bool) -> dict:
+def _detect_principal_type(user) -> str:
+    """Robust principal-type detection for permissions.rbac's
+    get_effective_permissions()/get_perm_version() — isinstance-based, not
+    `hasattr(user, 'employee_code')` (which a NonStaffIdentity trivially
+    fails, since it has no such attribute at all, silently defaulting every
+    student token to principal_type='employee' and resolving ZERO
+    permissions regardless of what's actually assigned — the bug found in
+    Phase C4, see docs/FIX_JWT_NONSTAFF_PERMS_RESULT.md).
+
+    Only 'non_staff' vs 'employee' — get_effective_permissions has no
+    'superadmin' principal_type (superadmins bypass it entirely, see
+    _build_authz_claims's is_superadmin branch below, unaffected either way).
+    """
+    from authentication.nonstaff_models import NonStaffIdentity
+    return 'non_staff' if isinstance(user, NonStaffIdentity) else 'employee'
+
+
+def _build_authz_claims(user, is_superadmin: bool, principal_type: str = 'employee') -> dict:
     """tenant_id / services / perms / perm_version claims.
     Imported lazily to avoid a circular import at Django app-loading time
-    (permissions.rbac already imports authentication.superadmin_models)."""
+    (permissions.rbac already imports authentication.superadmin_models).
+
+    principal_type routes get_effective_permissions()/get_perm_version() to
+    the right principal — 'employee' (default, unchanged) or 'non_staff'.
+    Passing the explicit default for an Employee caller is a no-op (identical
+    to the old no-argument call), so employee token output is unaffected."""
     from django.db.models import Q
     from django.utils import timezone
     from permissions.models import Service, Subscription
@@ -115,8 +148,8 @@ def _build_authz_claims(user, is_superadmin: bool) -> dict:
     return {
         'tenant_id': str(tenant_id) if tenant_id else None,
         'services': services,
-        'perms': sorted(get_effective_permissions(str(user.id))),
-        'perm_version': get_perm_version(str(user.id)),
+        'perms': sorted(get_effective_permissions(str(user.id), principal_type=principal_type)),
+        'perm_version': get_perm_version(str(user.id), principal_type=principal_type),
     }
 
 

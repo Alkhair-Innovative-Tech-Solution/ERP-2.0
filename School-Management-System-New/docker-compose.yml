@@ -577,6 +577,8 @@ services:
       REDIS_URL: redis://redis:6379/7
       STUDENT_SERVICE_URL: http://student-service:8005
       TIMETABLE_SERVICE_URL: http://timetable-service:8009
+      # Phase C3: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       STUDENT_DB_HOST: postgres-student
       STUDENT_DB_NAME: student_db
       STUDENT_DB_USER: student_user
@@ -608,6 +610,8 @@ services:
       DB_PASSWORD: ${FEES_DB_PASS:-fees_pass}
       REDIS_URL: redis://redis:6379/8
       STUDENT_SERVICE_URL: http://student-service:8005
+      # Phase C2: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-fees:
         condition: service_healthy
@@ -761,6 +765,8 @@ services:
       TIMETABLE_DB_NAME: timetable_db
       TIMETABLE_DB_USER: timetable_user
       TIMETABLE_DB_PASSWORD: ${TIMETABLE_DB_PASS:-timetable_pass}
+      # Phase C4: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     volumes:
       - subject_media:/app/media
     user: "0"

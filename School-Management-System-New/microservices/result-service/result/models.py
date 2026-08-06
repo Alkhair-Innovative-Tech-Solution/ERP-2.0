@@ -7,6 +7,28 @@ from teachers.models import Teacher
 from coordinator.models import Coordinator
 
 
+class CentralAuthFieldsMixin(models.Model):
+    """
+    Phase C3: additive, nullable fields for the central-auth repoint. Same
+    shape as content-service's (C1) / fees-service's (C2) — dual-run, the
+    existing `organization` FK and OrganizationManager-based `objects`
+    manager on each model are untouched; these are new, parallel fields
+    used only by the central-auth code path (see result/views.py,
+    result/dual_auth.py).
+
+    tenant_id:       stamped from the verified token's tenant_id claim on
+                      create, used to scope reads for central-auth requests.
+    central_org_id:   maps this row's local `users.Organization` to its
+                      central-auth Organization equivalent. Nullable,
+                      backfillable — synthetic-only for now.
+    """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        abstract = True
+
+
 class ResultManager(OrganizationManager):
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
@@ -18,7 +40,7 @@ class ResultManager(OrganizationManager):
         return super().get_queryset().filter(is_deleted=True)
 
 
-class Result(models.Model):
+class Result(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = ResultManager()
     all_objects = models.Manager()
@@ -57,6 +79,18 @@ class Result(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='results')
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name='created_results')
     coordinator = models.ForeignKey(Coordinator, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_results')
+
+    # Phase C3: student/teacher/coordinator are real FKs to local
+    # Student/Teacher/Coordinator rows — a CentralAuthUser (or a central
+    # identity resolved for someone else, e.g. the student a teacher is
+    # grading) can't be assigned to them directly (ValueError: must be a
+    # "Student"/"Teacher"/"Coordinator" instance). Separate nullable UUID
+    # columns carry the central-auth identity id instead, same pattern as
+    # C2's Payment.central_user_id. Populated only on the central-auth
+    # code path (result/views.py); legacy rows leave these null.
+    central_student_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_teacher_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_coordinator_id = models.UUIDField(null=True, blank=True, db_index=True)
     
     # Organization
     organization = models.ForeignKey(
@@ -97,6 +131,12 @@ class Result(models.Model):
     # Audit Trail
     approved_by_coordinator = models.ForeignKey(Coordinator, on_delete=models.SET_NULL, null=True, blank=True, related_name='coordinator_approvals')
     approved_by_principal = models.ForeignKey('principals.Principal', on_delete=models.SET_NULL, null=True, blank=True, related_name='principal_approvals')
+    # Phase C3: separate from central_coordinator_id above — the reviewing
+    # coordinator (`coordinator`) and the one who ultimately approved
+    # (`approved_by_coordinator`) can differ in principle, so each real FK
+    # gets its own central-id column rather than sharing one.
+    central_approved_by_coordinator_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_approved_by_principal_id = models.UUIDField(null=True, blank=True, db_index=True)
     approved_by_coordinator_at = models.DateTimeField(null=True, blank=True)
     approved_by_principal_at = models.DateTimeField(null=True, blank=True)
     
@@ -287,7 +327,7 @@ class FinalTermResult(Result):
         verbose_name = "Final Term Result"
         verbose_name_plural = "Final Term Results"
 
-class SubjectMark(models.Model):
+class SubjectMark(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
     all_objects = models.Manager()
@@ -391,7 +431,7 @@ class SubjectMark(models.Model):
         unique_together = ['result', 'subject_name']
 
 
-class ResultEditRequest(models.Model):
+class ResultEditRequest(CentralAuthFieldsMixin, models.Model):
     """A teacher's request to re-open an already-approved Result for editing.
 
     Flow: teacher submits a request (with a reason) on an approved result ->
@@ -418,6 +458,9 @@ class ResultEditRequest(models.Model):
         'users.Organization', on_delete=models.CASCADE, null=True, blank=True,
         related_name='result_edit_requests'
     )
+    # Phase C3: same reasoning as Result.central_teacher_id/central_coordinator_id.
+    central_teacher_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_coordinator_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     reason = models.TextField(help_text="Why the teacher needs to edit/recheck this result")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -433,7 +476,7 @@ class ResultEditRequest(models.Model):
         ordering = ['-created_at']
 
 
-class MonthlyMarkConfig(models.Model):
+class MonthlyMarkConfig(CentralAuthFieldsMixin, models.Model):
     """Per-month total marks for Monthly Test results, scoped to a classroom +
     academic year. One total per (classroom, year, month) — applies to ALL
     subjects of that month (default 25). Percentage/grade/pass/rank all derive
@@ -467,7 +510,7 @@ class MonthlyMarkConfig(models.Model):
         return f"MonthlyMarkConfig({self.classroom_id} {self.academic_year} {self.month} = {self.total_marks})"
 
 
-class RegionalBenchmark(models.Model):
+class RegionalBenchmark(CentralAuthFieldsMixin, models.Model):
     """External reference scores (e.g. Ministry of Education / regional averages)
     to compare the school's own SUBJECT averages against — the "Regional Score
     Variance" indicator.
@@ -500,6 +543,11 @@ class RegionalBenchmark(models.Model):
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='+')
+    # Phase C3: real FK to users.User — same reasoning as
+    # Result.central_teacher_id etc. Not exposed via any DRF view today
+    # (RegionalBenchmark has no viewset in views.py), added for completeness
+    # per the field-type audit; no dual-auth write path exercises it yet.
+    central_uploaded_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

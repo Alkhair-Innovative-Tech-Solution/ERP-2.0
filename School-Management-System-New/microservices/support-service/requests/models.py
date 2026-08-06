@@ -2,6 +2,28 @@ from django.db import models
 from users.managers import OrganizationManager
 from django.utils import timezone
 
+
+class CentralAuthFieldsMixin(models.Model):
+    """
+    Phase C6: additive, nullable fields for the central-auth repoint. Same
+    shape as C1-C5 — dual-run, the existing `organization` FK and
+    OrganizationManager-based `objects` manager on each model are untouched;
+    these are new, parallel fields used only by the central-auth code path
+    (see support_service/dual_auth.py, requests/views.py, form_builder/views.py).
+
+    tenant_id:       stamped from the verified token's tenant_id claim on
+                      create, used to scope reads for central-auth requests.
+    central_org_id:   maps this row's local `users.Organization` to its
+                      central-auth Organization equivalent. Nullable,
+                      backfillable — synthetic-only for now.
+    """
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        abstract = True
+
+
 # Choices
 CATEGORY_CHOICES = [
     ('leave', 'Leave Request'),
@@ -32,15 +54,27 @@ STATUS_CHOICES = [
     ('rejected', 'Rejected'),
 ]
 
-class RequestComplaint(models.Model):
+class RequestComplaint(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    # Phase C6: unfiltered manager — needed by the central-auth read path
+    # (see support_service/dual_auth.py's central_tenant_qs). Not a schema
+    # change (no migration needed — a Manager isn't a field).
+    all_objects = models.Manager()
     """Model for teacher requests and complaints"""
-    
+
     # Foreign Keys
     teacher = models.ForeignKey('teachers.Teacher', on_delete=models.CASCADE, related_name='requests')
     coordinator = models.ForeignKey('coordinator.Coordinator', on_delete=models.CASCADE, related_name='assigned_requests')
     principal = models.ForeignKey('principals.Principal', on_delete=models.SET_NULL, null=True, blank=True, related_name='forwarded_requests')
+    # Phase C6: teacher/coordinator/principal are real FKs to vendored
+    # staff-service models — a CentralAuthUser/central identity can't be
+    # assigned to them directly (ValueError: must be a "Teacher"/etc.
+    # instance). Separate nullable UUID columns carry the central-auth
+    # identity instead, populated on the central-auth code path.
+    central_teacher_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_coordinator_id = models.UUIDField(null=True, blank=True, db_index=True)
+    central_principal_id = models.UUIDField(null=True, blank=True, db_index=True)
     
     # Organization
     organization = models.ForeignKey(
@@ -121,10 +155,14 @@ class RequestComplaint(models.Model):
         
         super().save(*args, **kwargs)
 
-class RequestComment(models.Model):
+class RequestComment(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    all_objects = models.Manager()
     """Model for comments on requests"""
+    # Phase C6: audited — no person FK/id field exists on this model
+    # (author identity is only the `user_type` CharField enum below), so no
+    # central_*_id column is needed here beyond the Organization mixin.
     
     USER_TYPE_CHOICES = [
         ('teacher', 'Teacher'),
@@ -153,10 +191,14 @@ class RequestComment(models.Model):
     def __str__(self):
         return f"Comment on {self.request.subject} by {self.get_user_type_display()}"
 
-class RequestStatusHistory(models.Model):
+class RequestStatusHistory(CentralAuthFieldsMixin, models.Model):
     # Custom manager for multi-tenancy
     objects = OrganizationManager()
+    all_objects = models.Manager()
     """Model to track status changes"""
+    # Phase C6: audited — no person FK/id field exists on this model
+    # (`changed_by` below is a role-label CharField, not an identity), so no
+    # central_*_id column is needed here beyond the Organization mixin.
     
     request = models.ForeignKey(RequestComplaint, on_delete=models.CASCADE, related_name='status_history')
     

@@ -735,6 +735,8 @@ services:
       DB_USER: support_user
       DB_PASSWORD: ${SUPPORT_DB_PASS:-support_pass}
       REDIS_URL: redis://redis:6379/11
+      # Phase C6: central auth JWKS verification.
+      AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-support:
         condition: service_healthy

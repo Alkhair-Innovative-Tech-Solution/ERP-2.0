@@ -13,4 +13,9 @@ Pillow
 pika
 pandas>=2.1.0
 django-phonenumber-field[phonenumbers]
+# Phase C6: NOT adding the `requests` HTTP library here — this service has
+# a local Django app also named `requests` which shadows it (confirmed via
+# sys.path order; see central_auth/jwks.py's docstring). JWKS fetching uses
+# stdlib urllib instead.
+cryptography==42.0.5
 ams-shared @ file:///app/ams-shared

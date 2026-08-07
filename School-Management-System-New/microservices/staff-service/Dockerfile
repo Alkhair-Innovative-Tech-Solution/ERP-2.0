@@ -38,6 +38,9 @@ COPY microservices/campus-service/classes/ /app/classes/
 COPY microservices/student-service/students/ /app/students/
 # Re-copy staff-service services LAST so staff-service overrides auth-service versions
 COPY microservices/staff-service/services/ /app/services/
+# Phase C12: staff-service-only override of vendored users/middleware.py
+# (central-auth-aware) — see users_override/middleware.py's own docstring.
+COPY microservices/staff-service/users_override/middleware.py /app/users/middleware.py
 RUN chmod +x /app/entrypoint.sh \
     && chown -R appuser:appgroup /app
 

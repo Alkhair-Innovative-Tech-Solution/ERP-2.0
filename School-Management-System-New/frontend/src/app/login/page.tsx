@@ -735,7 +735,13 @@ export default function LoginPage() {
         return;
       }
 
-      const userRole = String(data?.user?.role || "").toLowerCase();
+      // Phase D-b4-fix: central auth's role text is a designation name
+      // ("Accounts Officer", space-separated) rather than legacy's role
+      // slug ("accounts_officer", underscore) — normalize spaces to
+      // underscores so the exact-match check below works for both. A
+      // no-op for legacy (which never has spaces here). The other checks
+      // are substring-based and already tolerate either form.
+      const userRole = String(data?.user?.role || "").toLowerCase().replace(/\s+/g, "_");
 
       // Redirect based on role
       if (userRole === "student") {

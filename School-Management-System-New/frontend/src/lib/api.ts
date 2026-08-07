@@ -9,6 +9,27 @@ export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost';
 }
 
+// Phase D-b4: dual-run login source switch. 'legacy' (default) keeps the
+// existing auth-8001 login/refresh path byte-for-byte unchanged — nothing
+// below reads this until it's explicitly set to 'central'. Only login and
+// token refresh care about this; every other API call (apiGet/apiPost/...)
+// is unaffected either way, since they just attach whatever access token is
+// already in localStorage as a Bearer token regardless of which auth
+// source issued it (this is exactly what the C1-C13 dual-auth work on each
+// SMS microservice was for).
+function getAuthSource(): 'legacy' | 'central' {
+  return process.env.NEXT_PUBLIC_AUTH_SOURCE === 'central' ? 'central' : 'legacy';
+}
+
+// Central auth's own base URL (Enterprise-Resource-Planning/Auth-service-main),
+// separate from getApiBaseUrl() (the SMS gateway) — central auth only serves
+// login/refresh here, never the SMS business-data APIs. Not hardcoded; must
+// be set via env when NEXT_PUBLIC_AUTH_SOURCE=central is used.
+function getCentralAuthBaseUrl(): string {
+  const base = process.env.NEXT_PUBLIC_CENTRAL_AUTH_URL || '';
+  return base.endsWith('/') ? base.slice(0, -1) : base;
+}
+
 // API endpoints - obfuscated to reduce visibility in bundled code
 const _a = '/api', _s = 'students', _t = 'teachers', _c = 'campus', _u = 'users';
 const _at = 'attendance', _co = 'coordinators', _p = 'principals';
@@ -260,15 +281,23 @@ export async function authorizedFetch(path: string, init: RequestInit = {}, alre
     const refresh = getRefreshToken();
     if (refresh) {
       try {
-        const refreshRes = await fetchWithTimeout(`${cleanBase}${API_ENDPOINTS.AUTH_REFRESH}`, {
+        // Phase D-b4: central's /refresh takes { refresh_token } and returns
+        // { access_token }, vs legacy's { refresh } / { access }. Everything
+        // else about this retry (single attempt, same headers, same retry-the-
+        // original-request behavior) is identical either way.
+        const isCentral = getAuthSource() === 'central';
+        const refreshUrl = isCentral
+          ? `${getCentralAuthBaseUrl()}/api/auth/refresh`
+          : `${cleanBase}${API_ENDPOINTS.AUTH_REFRESH}`;
+        const refreshRes = await fetchWithTimeout(refreshUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh }),
+          body: JSON.stringify(isCentral ? { refresh_token: refresh } : { refresh }),
           credentials: 'omit',
         });
         if (refreshRes.ok) {
           const data = await refreshRes.json();
-          const newAccess = data?.access as string | undefined;
+          const newAccess = (isCentral ? data?.access_token : data?.access) as string | undefined;
           if (newAccess) {
             setAuthTokens(newAccess, refresh);
             const retryHeaders = new Headers(init.headers || {});
@@ -305,6 +334,10 @@ export async function authorizedFetch(path: string, init: RequestInit = {}, alre
 
 // Auth APIs
 export async function loginWithEmailPassword(emailOrCode: string, password: string) {
+  if (getAuthSource() === 'central') {
+    return loginWithEmailPasswordCentral(emailOrCode, password);
+  }
+
   const base = getApiBaseUrl();
   const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
   const res = await fetch(`${cleanBase}${API_ENDPOINTS.AUTH_LOGIN}`, {
@@ -328,6 +361,115 @@ export async function loginWithEmailPassword(emailOrCode: string, password: stri
     window.localStorage.setItem('sis_organization', JSON.stringify(data.organization));
   }
   return data;
+}
+
+// Phase D-b4: central-auth path for loginWithEmailPassword(), used only when
+// NEXT_PUBLIC_AUTH_SOURCE=central. Central's /login-sms returns its own
+// clean shape (access_token/refresh_token/principal) — this function is the
+// ONLY place that shape is known; it adapts it into exactly the
+// access/refresh/user/organization contract the rest of the app (and
+// setAuthTokens/sis_user/sis_organization storage) already consumes, so
+// nothing downstream needs to change.
+//
+// Known gap, not fixable from the frontend alone: central's `principal`
+// carries no campus/level/department data (deliberately — see
+// docs/PHASE_D_B1_SMS_LOGIN_RESULT.md, "HR fields are not included, this
+// token is an auth artifact"), so getUserCampusId()/getUserLevelId() below
+// will return null for a central-authenticated session. Also, the one
+// EXACT role-string check in login/page.tsx (`userRole === "accounts_officer"`)
+// won't match central's designation-derived role text (which has a space,
+// e.g. "accounts officer" after lowercasing, not an underscore) — every
+// other redirect check there is substring-based (`.includes('coord')`,
+// `.includes('teach')`) and is unaffected. Flagged in
+// docs/PHASE_D_B4_FRONTEND_ADAPTER_RESULT.md, not silently patched over.
+async function loginWithEmailPasswordCentral(email: string, password: string) {
+  const centralBase = getCentralAuthBaseUrl();
+  const res = await fetch(`${centralBase}/api/auth/login-sms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+    credentials: 'omit'
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    handleApiError(res, text);
+  }
+  const data = await res.json();
+  const access = data?.access_token as string | undefined;
+  const refresh = data?.refresh_token as string | undefined;
+  const principal = data?.principal as {
+    user_id?: string; person_type?: string; full_name?: string; email?: string;
+    tenant_id?: string; tenant_name?: string; role?: string;
+    services?: string[]; perms?: string[];
+  } | undefined;
+
+  if (access) setAuthTokens(access, refresh);
+
+  const user: any = principal ? {
+    id: principal.user_id,
+    full_name: principal.full_name,
+    email: principal.email,
+    // Best-effort: central's role is a human-readable designation name
+    // ("Teacher", "Accounts Officer") or the literal 'student' — lowercased
+    // to match how login/page.tsx already normalizes data.user.role before
+    // comparing. See the exact-match caveat above.
+    role: (principal.role || (principal.person_type === 'student' ? 'student' : '') || '').toLowerCase(),
+    person_type: principal.person_type,
+    services: principal.services,
+    perms: principal.perms,
+  } : undefined;
+
+  // Phase D-b4-fix: central's token deliberately carries no campus/level
+  // (it's SMS profile data, not central identity — see
+  // docs/PHASE_D_B4_FIX_RESULT.md's gap-1 investigation). Best-effort fetch
+  // it from staff-service's own /me endpoints (already central-auth-aware
+  // via Teacher/Principal/Coordinator.get_for_user(), Phase C12/D-b4-fix)
+  // and merge into `user` under the same campus_id/level_id keys
+  // getUserCampusId()/getUserLevelId() already read — so those two
+  // functions need zero changes. Role-bucketed the same substring-based
+  // way login/page.tsx's own redirect logic already does. Never blocks
+  // login: a failed or absent fetch just leaves campus/level unset, same
+  // as any role that doesn't have one (admin, org_admin, accounts_officer).
+  if (user && principal?.person_type === 'staff' && access) {
+    const roleText = String(user.role || '');
+    const meEndpoint = roleText.includes('coord') ? '/api/coordinators/me/'
+      : roleText.includes('teach') ? '/api/teachers/me/'
+      : roleText.includes('princip') ? '/api/principals/me/'
+      : null;
+    if (meEndpoint) {
+      try {
+        const base = getApiBaseUrl();
+        const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+        const meRes = await fetch(`${cleanBase}${meEndpoint}`, {
+          headers: { 'Authorization': `Bearer ${access}` },
+          credentials: 'omit',
+        });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          const campusId = meData?.campus ?? meData?.current_campus ?? null;
+          const levelId = meData?.level ?? null;
+          if (campusId !== null) user.campus_id = campusId;
+          if (levelId !== null) user.level_id = levelId;
+        }
+      } catch {
+        // Best-effort — login must not fail because the campus lookup did.
+      }
+    }
+  }
+
+  const organization = principal ? {
+    id: principal.tenant_id,
+    name: principal.tenant_name,
+  } : undefined;
+
+  if (typeof window !== 'undefined' && user) {
+    window.localStorage.setItem('sis_user', JSON.stringify(user));
+  }
+  if (typeof window !== 'undefined' && organization) {
+    window.localStorage.setItem('sis_organization', JSON.stringify(organization));
+  }
+
+  return { access, refresh, user, organization };
 }
 
 export async function getPrincipalFormOptions() {

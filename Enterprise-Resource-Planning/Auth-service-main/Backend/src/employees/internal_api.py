@@ -14,6 +14,14 @@ student-creation dual-write, reusing the exact B2 import logic
 same secret/gate logic, same fail-closed behavior, only the record shape
 and import fn differ (no HR fields; see import_student_records's own
 SMS_STUDENT_RECORD_FIELDS docstring).
+
+Phase D-b5: sms-org-sync — receiving side for org-service's org name/
+active-status dual-write. Unlike staff/student, org-admin provisioning
+itself reuses sms-staff above (role='org_admin', see
+docs/PHASE_D_B5_ORG_PROVISIONING_RESULT.md for why); this endpoint is only
+for the Organization record's own name/is_active fields, matched by the
+new Organization.legacy_org_id (mirrors legacy_user_id's idempotency
+pattern, added this phase since none existed before).
 """
 from typing import List, Optional
 
@@ -22,6 +30,7 @@ from decouple import config
 from ninja import Router, Schema
 
 from employees.sms_import import import_staff_records, import_student_records
+from employees.models import Organization, Tenant
 
 router = Router(tags=["Internal"])
 
@@ -104,3 +113,50 @@ def sync_sms_student(request: HttpRequest, payload: SmsStudentSyncIn):
         "updated": summary["updated"],
         "errors": [f"{r.get('legacy_user_id')}: {msg}" for r, msg in summary["errors"]],
     }
+
+
+class SmsOrgSyncIn(Schema):
+    legacy_org_id: int
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class SmsOrgSyncOut(Schema):
+    created: bool
+    updated: bool
+
+
+@router.post("/sms-org-sync", response={200: SmsOrgSyncOut, 401: ErrorOut})
+def sync_sms_org(request: HttpRequest, payload: SmsOrgSyncIn):
+    """Upsert an SMS org-service Organization's name/active-status into
+    central auth, matched idempotently by legacy_org_id. Fields are
+    optional — only what's present gets applied, so a partial update (e.g.
+    just is_active on invoice approval) doesn't clobber name with null.
+    Same secret check, same fail-closed behavior as sms-staff/sms-student.
+
+    Always lands under tenant SMS01's existing Organization set — creates
+    a new Organization row on first sync for a given legacy_org_id (org_code
+    derived from it, since org-service's own Organization has no code of
+    its own to reuse), updates it on every subsequent call.
+    """
+    secret = request.headers.get('X-Internal-Secret', '')
+    if not INTERNAL_SECRET or secret != INTERNAL_SECRET:
+        return 401, {"error": "Invalid or missing internal secret"}
+
+    tenant = Tenant.objects.get(tenant_code="SMS01")
+    org = Organization.all_objects.filter(legacy_org_id=payload.legacy_org_id).first()
+    created = org is None
+    if created:
+        org = Organization(
+            tenant=tenant,
+            legacy_org_id=payload.legacy_org_id,
+            org_code=f"SO{payload.legacy_org_id}"[:10],
+            name=payload.name or f"SMS Org {payload.legacy_org_id}",
+        )
+    if payload.name is not None:
+        org.name = payload.name
+    if payload.is_active is not None:
+        org.is_active = payload.is_active
+    org.save()
+
+    return 200, {"created": created, "updated": not created}

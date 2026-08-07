@@ -30,6 +30,11 @@ class SubscriptionPlan(models.Model):
     is_enterprise = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, related_name='created_plans')
+    # Phase C11: created_by is a simple audit person-FK to the diverged
+    # User fork, which a central-auth actor can't be assigned to directly
+    # (see org_service/dual_auth.py's module docstring). Additive/nullable —
+    # populated only for central-auth creates going forward.
+    central_created_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -74,6 +79,23 @@ class Organization(models.Model):
     activation_date = models.DateTimeField(null=True, blank=True)
 
     created_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='created_organizations')
+    # Phase C11: created_by is a simple audit person-FK — see SubscriptionPlan's comment above.
+    central_created_by_id = models.UUIDField(null=True, blank=True, db_index=True)
+    # tenant_id: this Organization row's own 1:1 central-auth tenant —
+    # NOT a per-row scoping value the way tenant_id works in every other
+    # SMS service (there, one tenant owns MANY rows of a model; here, one
+    # Organization row IS conceptually the same real-world org as one
+    # central-auth Tenant). _get_org() (users/views.py) resolves a central
+    # token's Organization by matching this field against the token's own
+    # tenant_id claim.
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True, unique=True)
+    # central_org_id: the matching central-auth Organization row's own id
+    # (central auth models Tenant  ->  Organization as a separate 1:many
+    # relation, e.g. Tenant.organizations.first() — see
+    # employees/sms_import.py's _get_sms_org()). Schema-ready, stamped
+    # opportunistically; tenant_id above is the field actually used for
+    # matching/filtering.
+    central_org_id = models.UUIDField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -115,6 +137,8 @@ class Invoice(models.Model):
     receipt_uploaded_at = models.DateTimeField(null=True, blank=True)
 
     approved_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_invoices')
+    # Phase C11: approved_by is a simple audit person-FK — see SubscriptionPlan's comment above.
+    central_approved_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     rejection_note = models.TextField(blank=True)
     notes = models.TextField(blank=True)

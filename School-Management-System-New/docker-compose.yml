@@ -441,6 +441,13 @@ services:
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
+      # Phase C12: remap_central_user_ids management command only — see
+      # student_service/settings.py's identical CENTRAL_AUTH_DB_* comment.
+      CENTRAL_AUTH_DB_HOST: ${CENTRAL_AUTH_DB_HOST:-host.docker.internal}
+      CENTRAL_AUTH_DB_PORT: ${CENTRAL_AUTH_DB_PORT:-5432}
+      CENTRAL_AUTH_DB_NAME: ${CENTRAL_AUTH_DB_NAME:-auth_db}
+      CENTRAL_AUTH_DB_USER: ${CENTRAL_AUTH_DB_USER:-erp_admin}
+      CENTRAL_AUTH_DB_PASSWORD: ${CENTRAL_AUTH_DB_PASSWORD:-}
     depends_on:
       postgres-staff:
         condition: service_healthy

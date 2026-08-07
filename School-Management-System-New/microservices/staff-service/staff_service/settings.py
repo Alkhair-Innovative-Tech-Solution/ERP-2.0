@@ -114,6 +114,17 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "utils.exceptions.custom_exception_handler",
 }
 
+# Phase C12: used only by teachers/management/commands/remap_central_user_ids.py
+# — a direct, offline, one-time (re-runnable) cross-database read of
+# auth-service's employees_employee table, exact same pattern/rationale
+# as Phase C8 (student-service)'s identical command; see that file's own
+# docstring for why a direct DB connection instead of an HTTP call.
+CENTRAL_AUTH_DB_HOST = os.getenv("CENTRAL_AUTH_DB_HOST", "host.docker.internal")
+CENTRAL_AUTH_DB_PORT = os.getenv("CENTRAL_AUTH_DB_PORT", "5432")
+CENTRAL_AUTH_DB_NAME = os.getenv("CENTRAL_AUTH_DB_NAME", "auth_db")
+CENTRAL_AUTH_DB_USER = os.getenv("CENTRAL_AUTH_DB_USER", "erp_admin")
+CENTRAL_AUTH_DB_PASSWORD = os.getenv("CENTRAL_AUTH_DB_PASSWORD", "")
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",

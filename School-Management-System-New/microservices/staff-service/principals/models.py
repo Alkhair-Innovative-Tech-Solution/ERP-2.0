@@ -261,11 +261,21 @@ class Principal(models.Model):
     @classmethod
     def get_for_user(cls, user):
         """
-        Robust lookup: try employee_code == user.username, then email == user.email.
-        Returns a Principal instance or None.
+        Phase C12: for a central-auth actor, resolved via the exact
+        central_user_id match (never the fuzzy username/email fallback
+        below — that fallback matches a CENTRAL employee_code/email
+        against a LOCAL Principal.employee_code/email, two unrelated ID
+        spaces, which is exactly the "fuzzy" matching this phase's prompt
+        says never to use for identity).
+        Legacy: robust lookup: try employee_code == user.username, then
+        email == user.email. Returns a Principal instance or None.
         """
         if not user:
             return None
+
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            return cls.all_objects.filter(central_user_id=user.id).first()
 
         try:
             obj = cls.objects.filter(employee_code=user.username).first()

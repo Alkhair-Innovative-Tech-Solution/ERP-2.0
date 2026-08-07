@@ -48,9 +48,16 @@ class CoordinatorManager(OrganizationManager):
 class Coordinator(models.Model):
     # Custom manager
     objects = CoordinatorManager()
+    # Phase C12: unfiltered — the C5-class hazard (no bypass existed).
+    all_objects = models.Manager()
 
     # User Account
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='coordinator_profile')
+    # Phase C12: exact legacy_user_id -> central Employee.id remap — see
+    # teachers/models.py's Teacher.central_user_id comment (identical
+    # shape/rationale).
+    central_user_id = models.UUIDField(null=True, blank=True, db_index=True)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     # Organization
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='coordinators')

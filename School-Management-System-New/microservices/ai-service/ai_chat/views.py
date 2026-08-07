@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from .permissions import TOOL_PERMISSIONS, ROLE_DISPLAY
 from .db import student_conn, attendance_conn, staff_conn, campus_conn, result_conn, timetable_conn, fetchall, fetchone
 from central_auth.authentication import CentralAuthUser
+from ai_service.dual_auth import DualServiceSubscribed
 
 GEMINI_MODEL = "gemini-2.5-flash"
 

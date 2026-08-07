@@ -478,7 +478,34 @@ class Teacher(models.Model):
 
         except Exception as e:
             print(f"Error: {str(e)}")
-    
+
+    @classmethod
+    def get_for_user(cls, user):
+        """
+        Phase C12: for a central-auth actor, resolved via the exact
+        central_user_id match. Legacy: unchanged — teachers/views.py's own
+        `getattr(user, 'teacher_profile', None)` / `employee_code == user.
+        username` fallback pattern (see e.g. my_classes) is untouched;
+        this classmethod is used by the NEW central-auth call sites this
+        phase adds, mirroring Principal.get_for_user/Coordinator.get_for_user's
+        identical shape (Teacher never had one before this phase — it
+        used an inline pattern in each view instead).
+        """
+        if not user:
+            return None
+
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            return cls.all_objects.filter(central_user_id=user.id).first()
+
+        teacher = getattr(user, 'teacher_profile', None)
+        if teacher:
+            return teacher
+        try:
+            return cls.objects.filter(employee_code=user.username).first()
+        except Exception:
+            return None
+
     def soft_delete(self):
         """Soft delete the teacher - uses update() to bypass signals"""
         import logging

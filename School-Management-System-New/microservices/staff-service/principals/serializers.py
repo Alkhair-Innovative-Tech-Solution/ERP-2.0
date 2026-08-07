@@ -1,9 +1,17 @@
 from rest_framework import serializers
 from .models import Principal
+from campus.models import Campus
 from campus.serializers import CampusSerializer
 
 
 class PrincipalSerializer(serializers.ModelSerializer):
+    # Phase C12: `campus` is a bare field name in Meta.fields, so DRF
+    # auto-builds its PrimaryKeyRelatedField from Campus.objects
+    # (OrganizationManager — blind for a central-auth request, same
+    # C9-class blind spot found in every prior phase). _base_manager
+    # bypasses that for PK validation only.
+    campus = serializers.PrimaryKeyRelatedField(queryset=Campus._base_manager.all())
+
     # Nested serializers for related objects
     campus_data = CampusSerializer(source='campus', read_only=True)
 

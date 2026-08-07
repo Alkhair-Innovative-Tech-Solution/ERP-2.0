@@ -8,6 +8,8 @@ from django.contrib.auth import get_user_model
 from users.permissions import IsSuperAdmin, IsNotDonorForWrites
 from .models import Principal
 from .serializers import PrincipalSerializer
+from central_auth.authentication import CentralAuthUser
+from staff_service.dual_auth import DualServiceSubscribed, central_person_id, central_tenant_qs
 
 User = get_user_model()
 
@@ -15,24 +17,34 @@ User = get_user_model()
 class PrincipalViewSet(viewsets.ModelViewSet):
     queryset = Principal.objects.all()
     serializer_class = PrincipalSerializer
-    permission_classes = [IsAuthenticated, IsNotDonorForWrites]
-    
+    permission_classes = [IsAuthenticated, IsNotDonorForWrites, DualServiceSubscribed]
+
     # Filtering, search, and ordering
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['campus', 'shift', 'is_currently_active']
     search_fields = ['full_name', 'employee_code', 'email', 'contact_number', 'cnic']
     ordering_fields = ['full_name', 'joining_date', 'created_at']
     ordering = ['-created_at']  # Default ordering
-    
+
     def get_queryset(self):
         """Override to optimize queries and handle filtering"""
         user = self.request.user
+        # Phase C12: central-path tenant scoping via Principal's own
+        # tenant_id — same rationale as TeacherViewSet.get_queryset (see
+        # that file's comment). all_objects, not with_deleted() (an
+        # OrganizationManager method, thread-local-dependent) — is_deleted
+        # is filtered explicitly instead.
+        if isinstance(user, CentralAuthUser):
+            return central_tenant_qs(Principal.all_objects, user).filter(
+                is_deleted=False
+            ).select_related('campus', 'user')
+
         # Use with_deleted() to get all records, then filter by is_deleted=False
         queryset = Principal.objects.with_deleted().filter(is_deleted=False).select_related('campus', 'user')
-        
+
         if user.is_superadmin():
             return queryset
-            
+
         org_id = getattr(user, 'org_id', None)
 
         if user.role == 'org_admin':
@@ -49,22 +61,28 @@ class PrincipalViewSet(viewsets.ModelViewSet):
             else:
                 queryset = queryset.none()
             return queryset
-        
+
         return queryset
-    
+
     def perform_create(self, serializer):
         """Create principal and auto-generate user account"""
         user = self.request.user
         # Automatically set organization if user belongs to one
         save_kwargs = {}
-        org_id = getattr(user, 'org_id', None)
-        if not user.is_superadmin() and org_id:
-            from users.models import Organization
-            try:
-                save_kwargs['organization'] = Organization.objects.get(id=org_id)
-            except Organization.DoesNotExist:
-                pass
-            
+        if isinstance(user, CentralAuthUser):
+            # Phase C12: stamp tenant_id for a central-auth actor —
+            # organization stays unset (no tenant_id column to resolve
+            # one from, see get_queryset's comment above).
+            save_kwargs['tenant_id'] = user.tenant_id
+        else:
+            org_id = getattr(user, 'org_id', None)
+            if not user.is_superadmin() and org_id:
+                from users.models import Organization
+                try:
+                    save_kwargs['organization'] = Organization.objects.get(id=org_id)
+                except Organization.DoesNotExist:
+                    pass
+
         # Check for existing principal on the same campus + shift
         campus_id = serializer.validated_data.get('campus')
         shift = serializer.validated_data.get('shift')

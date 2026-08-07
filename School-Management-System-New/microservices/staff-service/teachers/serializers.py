@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Teacher, TeacherSubjectAssignment
 from classes.models import ClassRoom
+from campus.models import Campus
 from campus.serializers import CampusSerializer
 from coordinator.serializers import CoordinatorSerializer
 from classes.serializers import ClassRoomSerializer
@@ -20,6 +21,22 @@ class TeacherSubjectAssignmentSerializer(serializers.ModelSerializer):
 
 
 class TeacherSerializer(serializers.ModelSerializer):
+    # Phase C12: Meta.fields = "__all__" auto-generates PrimaryKeyRelatedFields
+    # for every FK from each related model's DEFAULT manager. current_campus/
+    # assigned_classroom/assigned_classrooms all point at campus-service's
+    # vendored Campus/ClassRoom models, whose `.objects` is OrganizationManager
+    # (blind for a central-auth request — same C9-class blind spot found in
+    # every prior phase). `_base_manager` bypasses that for PK validation only.
+    current_campus = serializers.PrimaryKeyRelatedField(
+        queryset=Campus._base_manager.all(), required=False, allow_null=True,
+    )
+    assigned_classroom = serializers.PrimaryKeyRelatedField(
+        queryset=ClassRoom._base_manager.all(), required=False, allow_null=True,
+    )
+    assigned_classrooms = serializers.PrimaryKeyRelatedField(
+        queryset=ClassRoom._base_manager.all(), required=False, many=True,
+    )
+
     # Nested serializers for related objects
     campus_data = CampusSerializer(source='current_campus', read_only=True)
     coordinators_data = CoordinatorSerializer(source='assigned_coordinators', many=True, read_only=True)

@@ -10,6 +10,8 @@ from users.permissions import IsSuperAdminOrPrincipal, IsNotDonorForWrites
 from .models import Teacher, TeacherSubjectAssignment
 from .serializers import TeacherSerializer, TeacherSubjectAssignmentSerializer
 from .filters import TeacherFilter
+from central_auth.authentication import CentralAuthUser
+from staff_service.dual_auth import DualServiceSubscribed, central_person_id, central_tenant_qs
 import tempfile
 import os
 from rest_framework.views import APIView
@@ -42,7 +44,7 @@ class TeacherPagination(PageNumberPagination):
 class TeacherViewSet(viewsets.ModelViewSet):
     queryset = Teacher.objects.all()
     serializer_class = TeacherSerializer
-    permission_classes = [IsAuthenticated, IsNotDonorForWrites]  # All authenticated users can view; donors are read-only
+    permission_classes = [IsAuthenticated, IsNotDonorForWrites, DualServiceSubscribed]  # All authenticated users can view; donors are read-only
     
     pagination_class = TeacherPagination
 
@@ -58,7 +60,22 @@ class TeacherViewSet(viewsets.ModelViewSet):
         from django.db.models import Min, Case, When, Value, IntegerField
         from django.db.models.functions import Coalesce, Least
 
-        queryset = Teacher.objects.select_related(
+        user = self.request.user
+        # Phase C12: central-path tenant scoping via Teacher's own
+        # tenant_id (stamped at create — see perform_create below), NOT
+        # the Organization-based .objects indirection every legacy branch
+        # below uses — this service's vendored Organization model has no
+        # tenant_id column (unlike C11's org-service, which added one),
+        # so that indirection can never resolve for a central token.
+        # Legacy base (Teacher.objects) is left completely untouched —
+        # TeacherManager.get_queryset() also filters is_deleted=False,
+        # which the central branch below replicates explicitly since
+        # all_objects doesn't have it.
+        if isinstance(user, CentralAuthUser):
+            base = central_tenant_qs(Teacher.all_objects, user).filter(is_deleted=False)
+        else:
+            base = Teacher.objects.all()
+        queryset = base.select_related(
             'current_campus',
             'assigned_classroom',
         ).prefetch_related(
@@ -81,10 +98,11 @@ class TeacherViewSet(viewsets.ModelViewSet):
                 output_field=IntegerField()
             )
         ).all()
-        
+
         # Role-based filtering
-        user = self.request.user
-        if user.is_superadmin():
+        if isinstance(user, CentralAuthUser):
+            pass  # already tenant-scoped above
+        elif user.is_superadmin():
             # Superadmin: Show everything
             pass
         elif user.role == 'admin':
@@ -146,7 +164,13 @@ class TeacherViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         save_kwargs = {}
-        if not user.is_superadmin():
+        if isinstance(user, CentralAuthUser):
+            # Phase C12: stamp tenant_id on create for a central-auth
+            # actor — organization stays unset (no tenant_id column on
+            # this service's Organization model to resolve one from, see
+            # get_queryset's comment above).
+            save_kwargs['tenant_id'] = user.tenant_id
+        elif not user.is_superadmin():
             org_id = getattr(user, 'org_id', None) or getattr(getattr(user, 'organization', None), 'pk', None)
             if org_id:
                 from users.models import Organization
@@ -332,10 +356,9 @@ class TeacherViewSet(viewsets.ModelViewSet):
         user = request.user
         try:
             # Try to get teacher profile
-            teacher = getattr(user, 'teacher_profile', None)
-            if not teacher:
-                # Fallback for some users who might have username as employee_code
-                teacher = Teacher.objects.filter(employee_code=user.username).first()
+            # Phase C12: exact central_user_id match for a central-auth
+            # actor; legacy .teacher_profile/employee_code fallback unchanged.
+            teacher = Teacher.get_for_user(user)
             
             if not teacher:
                 return Response({'error': 'Teacher profile not found'}, status=404)
@@ -473,9 +496,9 @@ class TeacherViewSet(viewsets.ModelViewSet):
         """Save teacher's digital signature"""
         user = request.user
         try:
-            teacher = getattr(user, 'teacher_profile', None)
-            if not teacher:
-                teacher = Teacher.objects.filter(employee_code=user.username).first()
+            # Phase C12: exact central_user_id match for a central-auth
+            # actor; legacy .teacher_profile/employee_code fallback unchanged.
+            teacher = Teacher.get_for_user(user)
             if not teacher:
                 return Response({'error': 'Teacher profile not found'}, status=404)
             signature_data = request.data.get('signature')
@@ -493,9 +516,9 @@ class TeacherViewSet(viewsets.ModelViewSet):
         """Retrieve teacher's digital signature"""
         user = request.user
         try:
-            teacher = getattr(user, 'teacher_profile', None)
-            if not teacher:
-                teacher = Teacher.objects.filter(employee_code=user.username).first()
+            # Phase C12: exact central_user_id match for a central-auth
+            # actor; legacy .teacher_profile/employee_code fallback unchanged.
+            teacher = Teacher.get_for_user(user)
             if not teacher:
                 return Response({'error': 'Teacher profile not found'}, status=404)
             return Response({
@@ -558,7 +581,7 @@ class TeacherViewSet(viewsets.ModelViewSet):
 
 class TeacherBulkUploadView(APIView):
     """Upload a CSV file to create multiple teachers at once."""
-    permission_classes = [IsAuthenticated, IsSuperAdminOrPrincipal]
+    permission_classes = [IsAuthenticated, IsSuperAdminOrPrincipal, DualServiceSubscribed]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -585,7 +608,7 @@ class TeacherBulkUploadView(APIView):
 
 class TeacherBulkUploadTemplateView(APIView):
     """Return an Excel-friendly template for bulk teacher upload."""
-    permission_classes = [IsAuthenticated, IsSuperAdminOrPrincipal]
+    permission_classes = [IsAuthenticated, IsSuperAdminOrPrincipal, DualServiceSubscribed]
 
     def get(self, request):
         from .services.teacher_csv_import import TEMPLATE_HEADERS, SAMPLE_ROW

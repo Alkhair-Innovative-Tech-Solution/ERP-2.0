@@ -714,6 +714,8 @@ services:
       TIMETABLE_DB_NAME: timetable_db
       TIMETABLE_DB_USER: timetable_user
       TIMETABLE_DB_PASSWORD: ${TIMETABLE_DB_PASS:-timetable_pass}
+      # Phase C13: central-auth JWKS verification.
+      CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-ai:
         condition: service_healthy

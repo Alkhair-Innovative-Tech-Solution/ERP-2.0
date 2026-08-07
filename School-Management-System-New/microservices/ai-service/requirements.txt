@@ -8,3 +8,8 @@ django-redis
 python-dotenv
 gunicorn
 whitenoise
+# Phase C13: central_auth/jwks.py needs requests (JWKS HTTP fetch) and
+# cryptography (RSA key parsing). PyJWT is already pulled in transitively
+# by djangorestframework-simplejwt.
+requests>=2.31.0
+cryptography==42.0.5

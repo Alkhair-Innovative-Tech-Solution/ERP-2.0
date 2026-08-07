@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from .permissions import TOOL_PERMISSIONS, ROLE_DISPLAY
 from .db import student_conn, attendance_conn, staff_conn, campus_conn, result_conn, timetable_conn, fetchall, fetchone
+from central_auth.authentication import CentralAuthUser
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
@@ -69,14 +70,33 @@ def _get_token_claim(user, claim, default=None):
 
 
 def _build_scope(user) -> dict:
+    is_central = isinstance(user, CentralAuthUser)
     role = _get_token_claim(user, 'role', '')
     org_id = _get_token_claim(user, 'org_id')
     campus_id = _get_token_claim(user, 'campus_id')
     user_id = user.id
+    # Phase C13: every downstream table these queries touch (students_student,
+    # teachers_teacher, coordinator_coordinator, principals_principal,
+    # campus_campus, classes_classroom/grade, attendance_attendance,
+    # result_result, transfers_classtransfer — confirmed by inspecting each)
+    # already has BOTH the legacy integer `organization_id` and a `tenant_id`
+    # UUID column. A central token's tenant_id is the wrong TYPE for the
+    # legacy column, so the central path swaps which COLUMN every query
+    # filters on (org_col), not just the value — see _execute_tool below.
+    org_col = "organization_id"
+    user_col = "user_id"
+
+    if is_central:
+        org_id = str(user.tenant_id) if user.tenant_id else None
+        org_col = "tenant_id"
+        user_col = "central_user_id"
+        # role is '' (unknown) or 'student' (exact — see AiCentralAuthUser's
+        # person_type mapping) at this point; resolved further below.
 
     scope = {
         "role": role,
         "org_id": org_id,
+        "org_col": org_col,
         "user_id": user_id,
         "campus_id": campus_id,
         "classroom_ids": [],
@@ -85,11 +105,59 @@ def _build_scope(user) -> dict:
     }
 
     try:
-        if role == "teacher":
+        if is_central and role != "student":
+            # Phase C13: a central STAFF token carries no role claim at
+            # all (no HR/designation data in the token, by design — see
+            # ai_service/dual_auth.py's module docstring). Resolved here
+            # via an EXACT central_user_id match against each candidate
+            # profile table in turn — never fuzzy, mirrors Phase C12's
+            # Teacher/Principal/Coordinator.get_for_user(central_token).
+            # org_admin/admin have no backing profile table and are left
+            # genuinely unresolved (role stays '') — flagged in the
+            # result doc, not hacked around.
             with staff_conn() as c:
                 with c.cursor() as cur:
                     row = fetchone(cur,
-                        "SELECT id, current_campus_id FROM teachers_teacher WHERE user_id=%s AND is_deleted=false LIMIT 1",
+                        "SELECT id, current_campus_id FROM teachers_teacher WHERE central_user_id=%s AND is_deleted=false LIMIT 1",
+                        (user_id,))
+                    if row:
+                        role = "teacher"
+                        scope["campus_id"] = row["current_campus_id"]
+                        teacher_id = row["id"]
+                        with campus_conn() as cc:
+                            with cc.cursor() as ccur:
+                                rows = fetchall(ccur,
+                                    "SELECT id FROM classes_classroom WHERE class_teacher_id=%s",
+                                    (teacher_id,))
+                                scope["classroom_ids"] = [r["id"] for r in rows]
+
+                    if not role:
+                        coord = fetchone(cur,
+                            "SELECT id, campus_id, level_id FROM coordinator_coordinator WHERE central_user_id=%s AND is_deleted=false LIMIT 1",
+                            (user_id,))
+                        if coord:
+                            role = "coordinator"
+                            scope["campus_id"] = coord["campus_id"]
+                            assigned = fetchall(cur,
+                                "SELECT level_id FROM coordinator_coordinator_assigned_levels WHERE coordinator_id=%s",
+                                (coord["id"],))
+                            scope["level_ids"] = [r["level_id"] for r in assigned] or ([coord["level_id"]] if coord["level_id"] else [])
+
+                    if not role:
+                        principal = fetchone(cur,
+                            "SELECT campus_id FROM principals_principal WHERE central_user_id=%s AND is_deleted=false LIMIT 1",
+                            (user_id,))
+                        if principal:
+                            role = "principal"
+                            scope["campus_id"] = principal["campus_id"]
+
+            scope["role"] = role
+
+        elif role == "teacher":
+            with staff_conn() as c:
+                with c.cursor() as cur:
+                    row = fetchone(cur,
+                        f"SELECT id, current_campus_id FROM teachers_teacher WHERE {user_col}=%s AND is_deleted=false LIMIT 1",
                         (user_id,))
                     if row:
                         scope["campus_id"] = row["current_campus_id"]
@@ -105,7 +173,7 @@ def _build_scope(user) -> dict:
             with staff_conn() as c:
                 with c.cursor() as cur:
                     coord = fetchone(cur,
-                        "SELECT id, campus_id, level_id FROM coordinator_coordinator WHERE user_id=%s AND is_deleted=false LIMIT 1",
+                        f"SELECT id, campus_id, level_id FROM coordinator_coordinator WHERE {user_col}=%s AND is_deleted=false LIMIT 1",
                         (user_id,))
                     if coord:
                         scope["campus_id"] = coord["campus_id"]
@@ -118,7 +186,7 @@ def _build_scope(user) -> dict:
             with student_conn() as c:
                 with c.cursor() as cur:
                     row = fetchone(cur,
-                        "SELECT id FROM students_student WHERE user_id=%s LIMIT 1",
+                        f"SELECT id FROM students_student WHERE {user_col}=%s LIMIT 1",
                         (user_id,))
                     if row:
                         scope["student_id"] = row["id"]
@@ -128,7 +196,7 @@ def _build_scope(user) -> dict:
     return scope
 
 
-def _resolve_campus_id(org_id, campus_name: str | None):
+def _resolve_campus_id(org_id, campus_name: str | None, org_col: str = "organization_id"):
     if not campus_name:
         return None
     try:
@@ -136,12 +204,22 @@ def _resolve_campus_id(org_id, campus_name: str | None):
         with campus_conn() as c:
             with c.cursor() as cur:
                 row = (
-                    fetchone(cur, "SELECT id FROM campus_campus WHERE organization_id=%s AND campus_name ILIKE %s LIMIT 1", (org_id, f"%{token}%"))
-                    or fetchone(cur, "SELECT id FROM campus_campus WHERE organization_id=%s AND campus_code ILIKE %s LIMIT 1", (org_id, f"%{token}%"))
+                    fetchone(cur, f"SELECT id FROM campus_campus WHERE {org_col}=%s AND campus_name ILIKE %s LIMIT 1", (org_id, f"%{token}%"))
+                    or fetchone(cur, f"SELECT id FROM campus_campus WHERE {org_col}=%s AND campus_code ILIKE %s LIMIT 1", (org_id, f"%{token}%"))
                 )
                 return row["id"] if row else None
     except Exception:
         return None
+
+
+def _conversation_lookup_kwargs(user, user_id, org_id) -> dict:
+    """Which Conversation columns to filter/create on. See models.py's
+    Conversation.central_user_id/.central_org_id comment for why a
+    central-auth actor can't use the legacy IntegerField user_id/org_id
+    at all (UUID vs int)."""
+    if isinstance(user, CentralAuthUser):
+        return {"central_user_id": user_id, "central_org_id": org_id}
+    return {"user_id": user_id, "org_id": org_id}
 
 
 def _build_system_prompt(user, scope, allowed_tools, today_str) -> str:
@@ -247,6 +325,7 @@ def _check_rate_limit(user_id, org_id):
 
 def _execute_tool(name: str, args: dict, scope: dict):
     org_id = scope["org_id"]
+    org_col = scope.get("org_col", "organization_id")
     role = scope["role"]
     today_str = str(date.today())
 
@@ -262,9 +341,9 @@ def _execute_tool(name: str, args: dict, scope: dict):
             with campus_conn() as c:
                 with c.cursor() as cur:
                     if scope_type == "campus" and scope["campus_id"]:
-                        campuses = fetchall(cur, "SELECT id, campus_name, campus_code FROM campus_campus WHERE organization_id=%s AND id=%s", (org_id, scope["campus_id"]))
+                        campuses = fetchall(cur, f"SELECT id, campus_name, campus_code FROM campus_campus WHERE {org_col}=%s AND id=%s", (org_id, scope["campus_id"]))
                     else:
-                        campuses = fetchall(cur, "SELECT id, campus_name, campus_code FROM campus_campus WHERE organization_id=%s", (org_id,))
+                        campuses = fetchall(cur, f"SELECT id, campus_name, campus_code FROM campus_campus WHERE {org_col}=%s", (org_id,))
             result = []
             for c in campuses:
                 cid = c["id"]
@@ -272,13 +351,13 @@ def _execute_tool(name: str, args: dict, scope: dict):
                 try:
                     with student_conn() as sc:
                         with sc.cursor() as scur:
-                            scur.execute("SELECT COUNT(*) FROM students_student WHERE organization_id=%s AND campus_id=%s AND is_active=true AND LOWER(current_grade)!='alumni'", (org_id, cid))
+                            scur.execute(f"SELECT COUNT(*) FROM students_student WHERE {org_col}=%s AND campus_id=%s AND is_active=true AND LOWER(current_grade)!='alumni'", (org_id, cid))
                             s_count = scur.fetchone()[0]
                 except Exception: pass
                 try:
                     with staff_conn() as tc:
                         with tc.cursor() as tcur:
-                            tcur.execute("SELECT COUNT(*) FROM teachers_teacher WHERE organization_id=%s AND current_campus_id=%s", (org_id, cid))
+                            tcur.execute(f"SELECT COUNT(*) FROM teachers_teacher WHERE {org_col}=%s AND current_campus_id=%s", (org_id, cid))
                             t_count = tcur.fetchone()[0]
                 except Exception: pass
                 result.append({"id": cid, "name": c["campus_name"], "code": c["campus_code"], "students": s_count, "teachers": t_count})
@@ -289,7 +368,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
     # ── get_students ─────────────────────────────────────────────────────────
     if name == "get_students":
         try:
-            conditions = ["organization_id=%s"]
+            conditions = [f"{org_col}=%s"]
             params = [org_id]
 
             if scope_type == "assigned_classroom":
@@ -314,7 +393,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                 if scope["campus_id"]:
                     conditions.append("campus_id=%s"); params.append(scope["campus_id"])
             else:
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
                 if campus_id:
                     conditions.append("campus_id=%s"); params.append(campus_id)
 
@@ -351,7 +430,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
     if name == "get_absent_students":
         try:
             target_date = args.get("date") or today_str
-            conditions = ["sa.organization_id=%s", "sa.status='absent'", "a.date=%s"]
+            conditions = [f"sa.{org_col}=%s", "sa.status='absent'", "a.date=%s"]
             params = [org_id, target_date]
 
             if scope_type == "assigned_classroom":
@@ -373,7 +452,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                 if scope["campus_id"]:
                     conditions.append("s.campus_id=%s"); params.append(scope["campus_id"])
             else:
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
                 if campus_id:
                     conditions.append("s.campus_id=%s"); params.append(campus_id)
 
@@ -398,7 +477,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
     if name == "get_attendance_summary":
         try:
             target_date = args.get("date") or today_str
-            conditions = ["organization_id=%s", "date=%s"]
+            conditions = [f"{org_col}=%s", "date=%s"]
             params = [org_id, target_date]
 
             if scope_type == "assigned_classroom":
@@ -425,7 +504,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                             conditions.append("classroom_id = ANY(%s)"); params.append(class_ids)
                     except Exception: pass
             else:
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
                 if campus_id:
                     try:
                         with campus_conn() as c:
@@ -448,7 +527,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
     # ── get_teachers ─────────────────────────────────────────────────────────
     if name == "get_teachers":
         try:
-            conditions = ["t.organization_id=%s", "t.is_deleted=false"]
+            conditions = [f"t.{org_col}=%s", "t.is_deleted=false"]
             params = [org_id]
 
             if scope_type == "assigned_levels":
@@ -467,7 +546,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                 if scope["campus_id"]:
                     conditions.append("t.current_campus_id=%s"); params.append(scope["campus_id"])
             else:
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
                 if campus_id:
                     conditions.append("t.current_campus_id=%s"); params.append(campus_id)
 
@@ -488,13 +567,13 @@ def _execute_tool(name: str, args: dict, scope: dict):
     # ── get_coordinators ─────────────────────────────────────────────────────
     if name == "get_coordinators":
         try:
-            conditions = ["c.organization_id=%s", "c.is_deleted=false"]
+            conditions = [f"c.{org_col}=%s", "c.is_deleted=false"]
             params = [org_id]
             if scope_type == "campus":
                 if scope["campus_id"]:
                     conditions.append("c.campus_id=%s"); params.append(scope["campus_id"])
             else:
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
                 if campus_id:
                     conditions.append("c.campus_id=%s"); params.append(campus_id)
             limit = min(int(args.get("limit", 30)), 100)
@@ -511,7 +590,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
     # ── get_results_summary ──────────────────────────────────────────────────
     if name == "get_results_summary":
         try:
-            conditions = ["r.organization_id=%s", "r.is_deleted=false"]
+            conditions = [f"r.{org_col}=%s", "r.is_deleted=false"]
             params = [org_id]
 
             if scope_type == "assigned_levels":
@@ -529,7 +608,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                 if scope["campus_id"]:
                     conditions.append("s.campus_id=%s"); params.append(scope["campus_id"])
             else:
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
                 if campus_id:
                     conditions.append("s.campus_id=%s"); params.append(campus_id)
 
@@ -569,13 +648,13 @@ def _execute_tool(name: str, args: dict, scope: dict):
             if scope_type == "campus":
                 campus_id = scope["campus_id"]
             elif scope_type == "all":
-                campus_id = _resolve_campus_id(org_id, args.get("campus_name"))
+                campus_id = _resolve_campus_id(org_id, args.get("campus_name"), org_col)
 
             results = []
             with timetable_conn() as c:
                 with c.cursor() as cur:
                     if not transfer_type or transfer_type == "class":
-                        q = "SELECT t.from_grade_name, t.from_section, t.to_grade_name, t.to_section, t.status, t.requested_date, s.name as student_name FROM transfers_classtransfer t JOIN students_student s ON s.id=t.student_id WHERE t.organization_id=%s"
+                        q = f"SELECT t.from_grade_name, t.from_section, t.to_grade_name, t.to_section, t.status, t.requested_date, s.name as student_name FROM transfers_classtransfer t JOIN students_student s ON s.id=t.student_id WHERE t.{org_col}=%s"
                         p = [org_id]
                         if campus_id: q += " AND s.campus_id=%s"; p.append(campus_id)
                         if status_filter: q += " AND t.status ILIKE %s"; p.append(f"%{status_filter}%")
@@ -584,7 +663,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                             results.append({"type": "Class Transfer", "student": r["student_name"], "from": f"{r['from_grade_name'] or ''}-{r['from_section'] or ''}".strip("-"), "to": f"{r['to_grade_name'] or ''}-{r['to_section'] or ''}".strip("-"), "status": r["status"], "date": str(r["requested_date"])})
 
                     if not transfer_type or transfer_type == "shift":
-                        q = "SELECT t.from_shift, t.to_shift, t.status, t.requested_date, s.name as student_name FROM transfers_shifttransfer t JOIN students_student s ON s.id=t.student_id WHERE t.organization_id=%s"
+                        q = f"SELECT t.from_shift, t.to_shift, t.status, t.requested_date, s.name as student_name FROM transfers_shifttransfer t JOIN students_student s ON s.id=t.student_id WHERE t.{org_col}=%s"
                         p = [org_id]
                         if campus_id: q += " AND t.campus_id=%s"; p.append(campus_id)
                         if status_filter: q += " AND t.status ILIKE %s"; p.append(f"%{status_filter}%")
@@ -593,7 +672,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
                             results.append({"type": "Shift Transfer", "student": r["student_name"], "from": r["from_shift"], "to": r["to_shift"], "status": r["status"], "date": str(r["requested_date"])})
 
                     if not transfer_type or transfer_type == "campus":
-                        q = "SELECT t.status, t.requested_date, s.name as student_name, fc.campus_name as from_campus, tc.campus_name as to_campus FROM transfers_campustransfer t JOIN students_student s ON s.id=t.student_id LEFT JOIN campus_campus fc ON fc.id=t.from_campus_id LEFT JOIN campus_campus tc ON tc.id=t.to_campus_id WHERE t.organization_id=%s"
+                        q = f"SELECT t.status, t.requested_date, s.name as student_name, fc.campus_name as from_campus, tc.campus_name as to_campus FROM transfers_campustransfer t JOIN students_student s ON s.id=t.student_id LEFT JOIN campus_campus fc ON fc.id=t.from_campus_id LEFT JOIN campus_campus tc ON tc.id=t.to_campus_id WHERE t.{org_col}=%s"
                         p = [org_id]
                         if campus_id: q += " AND t.from_campus_id=%s"; p.append(campus_id)
                         if status_filter: q += " AND t.status ILIKE %s"; p.append(f"%{status_filter}%")
@@ -611,7 +690,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
         if not student_id:
             return {"error": "Student profile nahi mila."}
         try:
-            conditions = ["student_id=%s", "organization_id=%s"]
+            conditions = [f"student_id=%s", f"{org_col}=%s"]
             params = [student_id, org_id]
             if args.get("exam_type"):
                 conditions.append("exam_type=%s"); params.append(args["exam_type"])
@@ -632,12 +711,12 @@ def _execute_tool(name: str, args: dict, scope: dict):
         try:
             with attendance_conn() as c:
                 with c.cursor() as cur:
-                    cur.execute("SELECT COUNT(*) FROM attendance_studentattendance WHERE student_id=%s AND organization_id=%s", (student_id, org_id))
+                    cur.execute(f"SELECT COUNT(*) FROM attendance_studentattendance WHERE student_id=%s AND {org_col}=%s", (student_id, org_id))
                     total = cur.fetchone()[0]
-                    cur.execute("SELECT COUNT(*) FROM attendance_studentattendance WHERE student_id=%s AND organization_id=%s AND status='present'", (student_id, org_id))
+                    cur.execute(f"SELECT COUNT(*) FROM attendance_studentattendance WHERE student_id=%s AND {org_col}=%s AND status='present'", (student_id, org_id))
                     present = cur.fetchone()[0]
                     absent = total - present
-                    rows = fetchall(cur, "SELECT a.date, sa.status FROM attendance_studentattendance sa JOIN attendance_attendance a ON a.id=sa.attendance_id WHERE sa.student_id=%s AND sa.organization_id=%s ORDER BY a.date DESC LIMIT 30", (student_id, org_id))
+                    rows = fetchall(cur, f"SELECT a.date, sa.status FROM attendance_studentattendance sa JOIN attendance_attendance a ON a.id=sa.attendance_id WHERE sa.student_id=%s AND sa.{org_col}=%s ORDER BY a.date DESC LIMIT 30", (student_id, org_id))
             return {"total_days": total, "present": present, "absent": absent, "attendance_percentage": round(present / total * 100, 1) if total else 0, "recent_records": [{"date": str(r["date"]), "status": r["status"]} for r in rows]}
         except Exception as e:
             return {"error": str(e)}
@@ -646,7 +725,7 @@ def _execute_tool(name: str, args: dict, scope: dict):
 
 
 class AIChatView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def post(self, request):
         from .models import Conversation, ConversationMessage
@@ -662,7 +741,7 @@ class AIChatView(APIView):
         user = request.user
         role = _get_token_claim(user, 'role', '')
         user_id = user.id
-        org_id = _get_token_claim(user, 'org_id')
+        org_id = str(user.tenant_id) if isinstance(user, CentralAuthUser) and user.tenant_id else _get_token_claim(user, 'org_id')
 
         allowed, limit_msg = _check_rate_limit(user_id, org_id)
         if not allowed:
@@ -675,6 +754,12 @@ class AIChatView(APIView):
             return _sse_response(_blocked())
 
         scope = _build_scope(user)
+        # Phase C13: for a central STAFF token, `role` above is still ''
+        # (unresolved) — the actual teacher/coordinator/principal
+        # resolution only happens inside _build_scope() (exact
+        # central_user_id match, see that function's own comment).
+        # scope["role"] is the one to trust from here on.
+        role = scope["role"]
         allowed_tools = _get_allowed_declarations(role)
 
         if not allowed_tools:
@@ -683,13 +768,14 @@ class AIChatView(APIView):
                 yield "data: [DONE]\n\n"
             return _sse_response(_no_tools())
 
+        conv_kwargs = _conversation_lookup_kwargs(user, user_id, org_id)
         conv_id = request.data.get("conversation_id")
         if conv_id:
-            conversation = Conversation.objects.filter(id=conv_id, user_id=user_id, org_id=org_id).first()
+            conversation = Conversation.objects.filter(id=conv_id, **conv_kwargs).first()
             if not conversation:
-                conversation = Conversation.objects.create(user_id=user_id, org_id=org_id)
+                conversation = Conversation.objects.create(**conv_kwargs)
         else:
-            conversation = Conversation.objects.create(user_id=user_id, org_id=org_id)
+            conversation = Conversation.objects.create(**conv_kwargs)
 
         history = list(conversation.messages.order_by("-created_at")[:20])
         history.reverse()
@@ -754,29 +840,32 @@ class AIChatView(APIView):
 
 
 class AIChatConversationsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         from .models import Conversation
-        user_id = request.user.id
-        org_id = _get_token_claim(request.user, 'org_id')
-        convs = Conversation.objects.filter(user_id=user_id, org_id=org_id).order_by("-updated_at")[:30]
+        user = request.user
+        user_id = user.id
+        org_id = str(user.tenant_id) if isinstance(user, CentralAuthUser) and user.tenant_id else _get_token_claim(user, 'org_id')
+        convs = Conversation.objects.filter(**_conversation_lookup_kwargs(user, user_id, org_id)).order_by("-updated_at")[:30]
         return Response([{"id": str(c.id), "title": c.title or "New Chat", "updated_at": c.updated_at.isoformat()} for c in convs])
 
 
 class AIChatHistoryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, DualServiceSubscribed]
 
     def get(self, request):
         from .models import Conversation
-        user_id = request.user.id
-        org_id = _get_token_claim(request.user, 'org_id')
+        user = request.user
+        user_id = user.id
+        org_id = str(user.tenant_id) if isinstance(user, CentralAuthUser) and user.tenant_id else _get_token_claim(user, 'org_id')
+        conv_kwargs = _conversation_lookup_kwargs(user, user_id, org_id)
         conv_id = request.query_params.get("conversation_id")
 
         if conv_id:
-            conversation = Conversation.objects.filter(id=conv_id, user_id=user_id, org_id=org_id).first()
+            conversation = Conversation.objects.filter(id=conv_id, **conv_kwargs).first()
         else:
-            conversation = Conversation.objects.filter(user_id=user_id, org_id=org_id).first()
+            conversation = Conversation.objects.filter(**conv_kwargs).first()
 
         if not conversation:
             return Response({"messages": [], "conversation_id": None})

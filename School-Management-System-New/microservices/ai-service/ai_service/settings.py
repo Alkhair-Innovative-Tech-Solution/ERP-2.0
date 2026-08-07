@@ -62,10 +62,19 @@ RESULT_DB   = {"host": os.getenv("RESULT_DB_HOST",   "postgres-result"),   "dbna
 TIMETABLE_DB = {"host": os.getenv("TIMETABLE_DB_HOST", "postgres-timetable"), "dbname": os.getenv("TIMETABLE_DB_NAME", "timetable_db"), "user": os.getenv("TIMETABLE_DB_USER", "timetable_user"), "password": os.getenv("TIMETABLE_DB_PASSWORD", "timetable_pass"), "port": os.getenv("TIMETABLE_DB_PORT", "5432")}
 
 REST_FRAMEWORK = {
-    # JWTStatelessUserAuthentication creates TokenUser from JWT claims — no DB user lookup needed
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTStatelessUserAuthentication"],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # Phase C13: DualAuthentication routes legacy HS256 tokens to the
+    # original JWTStatelessUserAuthentication (unchanged, still creates a
+    # TokenUser from JWT claims — no DB lookup) and central-auth RS256
+    # tokens to AiCentralAuthUser (see ai_service/dual_auth.py).
+    "DEFAULT_AUTHENTICATION_CLASSES": ["ai_service.dual_auth.DualAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+        "ai_service.dual_auth.DualServiceSubscribed",
+    ],
 }
+
+# Phase C13: central_auth/jwks.py reads settings.AUTH_SERVICE_URL.
+AUTH_SERVICE_URL = os.getenv("CENTRAL_AUTH_URL", "http://host.docker.internal:8000")
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),

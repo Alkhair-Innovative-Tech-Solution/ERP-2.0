@@ -1732,6 +1732,16 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
             except Exception as e:
                 print(f'[WARN] org sync to auth-service failed: {e}')
 
+        # Phase D-b5 dual-write: same is_active/name change, also to central
+        # auth (flag-gated, no-ops unless SYNC_TO_CENTRAL_AUTH=true).
+        if len(sync_payload) > 1:
+            from services.central_auth_sync_service import sync_org_to_central_auth
+            sync_org_to_central_auth(
+                legacy_org_id=org.id,
+                name=sync_payload.get('name'),
+                is_active=sync_payload.get('is_active'),
+            )
+
         # Broadcast org.updated so all services stay in sync via RabbitMQ
         try:
             from ams_shared.events.publisher import publish_event
@@ -2532,6 +2542,10 @@ def invoice_approve(request, pk):
         )
     except Exception as e:
         print(f'[WARN] org sync to auth-service failed: {e}')
+
+    # Phase D-b5 dual-write: same is_active activation, also to central auth.
+    from services.central_auth_sync_service import sync_org_to_central_auth
+    sync_org_to_central_auth(legacy_org_id=org.id, is_active=True)
 
     # Notify org admin
     try:

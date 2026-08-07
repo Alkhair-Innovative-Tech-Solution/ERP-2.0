@@ -357,6 +357,14 @@ services:
       # AUTH_SERVICE_URL above (that one is the legacy org/user-sync
       # service on :8001, unrelated to central auth).
       CENTRAL_AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
+      # Phase D-b5: dual-write org-admin provisioning + org name/active
+      # status to central auth's SMS01 tenant. Same flag as staff/student
+      # sync (one switch controls all three), off by default.
+      SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
+      CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
+      SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres-org:
         condition: service_healthy

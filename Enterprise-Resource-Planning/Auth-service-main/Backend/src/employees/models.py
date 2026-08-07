@@ -91,7 +91,24 @@ class Organization(SoftDeleteModel):
     phone = models.CharField(max_length=20, blank=True, null=True)
     logo_url = models.URLField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)
-    
+
+    # Phase D-b5: idempotency/match key for a live org-service Organization
+    # pushed via POST /api/internal/sms-org-sync — same pattern as
+    # Employee.legacy_user_id / NonStaffIdentity.legacy_user_id. Null for
+    # every Organization not created that way (VMS/HDMS orgs, etc.).
+    legacy_org_id = models.BigIntegerField(
+        null=True, blank=True, unique=True, db_index=True,
+        help_text="Original org-service Organization.id (Phase D-b5 sync key), null if not synced from SMS"
+    )
+
+    # Phase D-b5: this model had no active/inactive concept at all before
+    # (only SoftDeleteModel's is_deleted, a different thing — deletion vs
+    # temporary suspension for non-payment). Every sibling model in this
+    # hierarchy that needs one already has its own (Tenant.is_active,
+    # Employee.is_active, NonStaffIdentity.is_active); Organization was the
+    # one missing it.
+    is_active = models.BooleanField(default=True)
+
     class Meta:
         verbose_name = "Organization"
         verbose_name_plural = "Organizations"

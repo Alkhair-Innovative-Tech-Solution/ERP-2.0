@@ -184,6 +184,22 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
         except http_requests.RequestException as e:
             print(f'[WARN] Could not reach auth-service to sync user {admin_email}: {e}')
 
+        # Phase D-b5 dual-write: also land this org-admin in central auth's
+        # SMS01 tenant, and push the new org's name/active status. No-ops
+        # unless SYNC_TO_CENTRAL_AUTH=true (same flag B4/D-b2 use). Never
+        # blocks org creation — auth-8001 sync above already ran and org
+        # was already committed.
+        from services.central_auth_sync_service import sync_org_admin_to_central_auth, sync_org_to_central_auth
+        sync_org_admin_to_central_auth(
+            local_user_id=local_user.id,
+            email=admin_email,
+            username=local_user.username,
+            password_hash=local_user.password,
+            full_name=admin_full_name or f"{first_name} {last_name}".strip() or admin_email,
+            is_active=org.is_active,
+        )
+        sync_org_to_central_auth(legacy_org_id=org.id, name=org.name, is_active=org.is_active)
+
         # Publish org.created event — all services will sync automatically via RabbitMQ
         try:
             from ams_shared.events.publisher import publish_event

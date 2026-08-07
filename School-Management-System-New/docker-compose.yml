@@ -452,6 +452,17 @@ services:
       CENTRAL_AUTH_DB_NAME: ${CENTRAL_AUTH_DB_NAME:-auth_db}
       CENTRAL_AUTH_DB_USER: ${CENTRAL_AUTH_DB_USER:-erp_admin}
       CENTRAL_AUTH_DB_PASSWORD: ${CENTRAL_AUTH_DB_PASSWORD:-}
+    # Phase D-b3: host.docker.internal already resolves here without this
+    # (Docker Desktop's embedded DNS provides it automatically — confirmed
+    # by reading /etc/hosts, which has no such entry, yet it still
+    # resolves). Added anyway as belt-and-suspenders: plain dockerd on
+    # native Linux (a real prod host, unlike this Docker Desktop dev
+    # machine) does NOT resolve this hostname without an explicit
+    # extra_hosts entry, so this makes the CENTRAL_AUTH_URL default
+    # actually portable off this machine. Harmless where it's already
+    # unnecessary (Docker Desktop just ignores/duplicates the mapping).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres-staff:
         condition: service_healthy
@@ -514,6 +525,11 @@ services:
       TIMETABLE_DB_NAME: timetable_db
       TIMETABLE_DB_USER: timetable_user
       TIMETABLE_DB_PASSWORD: ${TIMETABLE_DB_PASS:-timetable_pass}
+    # Phase D-b3: see staff-service's identical block for the full
+    # reasoning — belt-and-suspenders for native-Linux dockerd portability,
+    # harmless on this Docker Desktop dev machine where it already works.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres-student:
         condition: service_healthy

@@ -38,6 +38,11 @@ COPY microservices/campus-service/classes/ /app/classes/
 COPY microservices/staff-service/coordinator/ /app/coordinator/
 COPY microservices/staff-service/teachers/ /app/teachers/
 COPY microservices/staff-service/principals/ /app/principals/
+# Phase D-b2: student-service's own services/ (central_auth_sync_service.py)
+# copied LAST so it isn't overwritten by the auth-service services/ vendor
+# copy above — mirrors staff-service's Dockerfile exactly (same ordering
+# reason: last COPY into the same target dir wins for same-named files).
+COPY microservices/student-service/services/ /app/services/
 RUN chmod +x /app/entrypoint.sh \
     && chown -R appuser:appgroup /app
 

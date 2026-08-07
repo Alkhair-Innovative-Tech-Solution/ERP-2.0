@@ -710,13 +710,33 @@ class StudentViewSet(viewsets.ModelViewSet):
             # meaningless and actively harmful to auto-run for a
             # central-auth-created student (would leave a dangling
             # default-password legacy account nobody uses). Central-auth
-            # students get their login via a NonStaffIdentity, created
-            # centrally (Phase B2-style import) then linked via
-            # central_user_id by remap_central_user_ids — not by this
-            # request. FLAGGED: a newly-created central-auth student has no
-            # working login until that happens; out of scope to build a
-            # live NonStaffIdentity-creation call to auth-service here
-            # (touches only student-service, per this phase's rules).
+            # students get their login via a NonStaffIdentity instead.
+            #
+            # Phase D-b2: this used to be a flagged gap (no live path
+            # created that NonStaffIdentity — only the offline Phase B2
+            # batch importer did). Closed here: push this student straight
+            # to central auth's SMS01 tenant (flag-gated on
+            # SYNC_TO_CENTRAL_AUTH, same as staff). There is no local
+            # users.User to draw a password hash from on this branch (by
+            # design, see above), so a fresh default password is minted —
+            # same DEFAULT_PASSWORD convention every other auto-created SMS
+            # account already uses (UserCreationService.DEFAULT_PASSWORD,
+            # legacy _ensure_student_user_account's '12345').
+            # instance.student_id may still be None here if required fields
+            # (campus/shift/enrollment_year) were missing — matches
+            # _ensure_student_user_account's own guard below.
+            if instance.student_id:
+                from django.contrib.auth.hashers import make_password
+                from services.central_auth_sync_service import sync_student_to_central_auth, DEFAULT_PASSWORD
+                sync_student_to_central_auth(
+                    legacy_user_id=instance.id,
+                    email=instance.email or f"{instance.student_id}@student.portal",
+                    username=instance.student_id,
+                    password_hash=make_password(DEFAULT_PASSWORD),
+                    full_name=instance.full_name,
+                    role='student',
+                    is_active=True,
+                )
             _notify_attendance_sync()
             return
 
@@ -745,7 +765,14 @@ class StudentViewSet(viewsets.ModelViewSet):
         instance = serializer.save(**save_kwargs)
         instance._actor = user
         instance.save()
-        self._ensure_student_user_account(instance)
+        local_user = self._ensure_student_user_account(instance)
+        if local_user:
+            # Phase D-b2: dual-write, mirrors staff's create_user_from_entity
+            # calling both _sync_user_to_auth (legacy, above) and
+            # sync_staff_entity_to_central_auth (central) unconditionally.
+            # Flag-gated no-op when SYNC_TO_CENTRAL_AUTH isn't set.
+            from services.central_auth_sync_service import sync_student_entity_to_central_auth
+            sync_student_entity_to_central_auth(local_user, instance)
         _notify_attendance_sync()
 
     def _ensure_student_user_account(self, student):
@@ -753,29 +780,37 @@ class StudentViewSet(viewsets.ModelViewSet):
         Auto-create a User account for the student if one does not exist yet.
         Username = student_id, default password = '12345'.
         Only runs when student_id is set (i.e., student is not a draft without an ID).
+
+        Returns the User (existing or newly-created), or None if skipped/failed
+        — Phase D-b2: callers use this return value to also push the student to
+        central auth (sync_student_entity_to_central_auth needs the User's
+        already-hashed password). Every existing call site (perform_create,
+        perform_update, student_csv_import.py, backfill_student_auth_accounts.py)
+        already discarded the previous implicit `None` return, so returning a
+        value now doesn't change any of their behavior.
         """
         if not student.student_id:
-            return
-        
+            return None
+
         from users.models import User
-        
+
         # Determine the email to use: priority to student.email, fallback to placeholder
         actual_email = student.email if student.email else f"{student.student_id}@student.portal"
-        
+
         user_obj = User.objects.filter(username=student.student_id).first()
-        
+
         if user_obj:
             # If user exists, sync email if it changed or was placeholder and student now has one
             if student.email and user_obj.email != student.email:
                 user_obj.email = student.email
                 user_obj.save()
-            return
+            return user_obj
 
         # Check if email is already taken by another user
         if User.objects.filter(email__iexact=actual_email).exists():
             # If the placeholder email is taken, we might have a collision, but for now we skip
-            return
-            
+            return None
+
         try:
             u = User(
                 username=student.student_id,
@@ -789,8 +824,10 @@ class StudentViewSet(viewsets.ModelViewSet):
             u.set_password('12345')
             u.save()
             print(f"[STUDENT USER] Created user account for {student.student_id} with email {actual_email}")
+            return u
         except Exception as e:
             print(f"[STUDENT USER] Could not create user account for {student.student_id}: {e}")
+            return None
 
     def perform_update(self, serializer):
         """Set actor before updating student"""
@@ -798,7 +835,11 @@ class StudentViewSet(viewsets.ModelViewSet):
         instance = serializer.save()
         instance._actor = user
         instance.save()
-        self._ensure_student_user_account(instance)
+        local_user = self._ensure_student_user_account(instance)
+        if local_user:
+            # Phase D-b2: same dual-write as perform_create's legacy branch.
+            from services.central_auth_sync_service import sync_student_entity_to_central_auth
+            sync_student_entity_to_central_auth(local_user, instance)
     
     def destroy(self, request, *args, **kwargs):
         """Override destroy to ensure soft delete is used - NEVER calls default delete"""

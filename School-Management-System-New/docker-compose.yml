@@ -495,6 +495,12 @@ services:
       CENTRAL_AUTH_DB_NAME: ${CENTRAL_AUTH_DB_NAME:-auth_db}
       CENTRAL_AUTH_DB_USER: ${CENTRAL_AUTH_DB_USER:-erp_admin}
       CENTRAL_AUTH_DB_PASSWORD: ${CENTRAL_AUTH_DB_PASSWORD:-}
+      # Phase D-b2: dual-write new students to central auth's SMS01 tenant,
+      # mirroring staff-service's identical block. Same flag (one switch
+      # controls both), off by default.
+      SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
+      CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
+      SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       ATTENDANCE_SERVICE_URL: http://attendance-service:8006
       STAFF_DB_HOST: postgres-staff
       STAFF_DB_NAME: staff_db

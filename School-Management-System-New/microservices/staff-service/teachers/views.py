@@ -346,6 +346,22 @@ class TeacherViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(teachers, many=True)
         return Response(serializer.data)
 
+    @decorators.action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        """Return the current teacher's own profile (id, name, campus, shift, ...).
+
+        Phase D-b4-fix: mirrors Coordinator.me() exactly (coordinator/views.py)
+        — Teacher never had a self-profile action before this. Built so the
+        frontend can fetch campus/level for a central-auth session, which the
+        central-auth token deliberately never carries (see
+        docs/PHASE_D_B4_FIX_RESULT.md's gap-1 investigation — campus is SMS
+        profile data, not central identity, per the locked Phase A1 split).
+        """
+        teacher = Teacher.get_for_user(request.user)
+        if not teacher:
+            return Response({'error': 'Teacher profile not found'}, status=404)
+        return Response(self.get_serializer(teacher).data)
+
     @decorators.action(detail=False, methods=['get'], url_path='my-classes')
     def my_classes(self, request):
         """

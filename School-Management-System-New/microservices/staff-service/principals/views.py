@@ -150,6 +150,20 @@ class PrincipalViewSet(viewsets.ModelViewSet):
         instance.soft_delete()
         
     
+    @decorators.action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        """Return the current principal's own profile (id, name, campus, shift, ...).
+
+        Phase D-b4-fix: mirrors Coordinator.me() exactly (coordinator/views.py).
+        See Teacher.me() (teachers/views.py) for the same rationale — this is
+        how the frontend gets campus for a central-auth session without
+        putting SMS profile data into central identity.
+        """
+        principal = Principal.get_for_user(request.user)
+        if not principal:
+            return Response({'error': 'Principal profile not found'}, status=404)
+        return Response(self.get_serializer(principal).data)
+
     @decorators.action(detail=False, methods=['get'])
     def stats(self, request):
         """Get principal statistics"""

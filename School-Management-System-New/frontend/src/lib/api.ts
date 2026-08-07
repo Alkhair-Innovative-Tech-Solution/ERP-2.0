@@ -405,7 +405,7 @@ async function loginWithEmailPasswordCentral(email: string, password: string) {
 
   if (access) setAuthTokens(access, refresh);
 
-  const user = principal ? {
+  const user: any = principal ? {
     id: principal.user_id,
     full_name: principal.full_name,
     email: principal.email,
@@ -418,6 +418,44 @@ async function loginWithEmailPasswordCentral(email: string, password: string) {
     services: principal.services,
     perms: principal.perms,
   } : undefined;
+
+  // Phase D-b4-fix: central's token deliberately carries no campus/level
+  // (it's SMS profile data, not central identity — see
+  // docs/PHASE_D_B4_FIX_RESULT.md's gap-1 investigation). Best-effort fetch
+  // it from staff-service's own /me endpoints (already central-auth-aware
+  // via Teacher/Principal/Coordinator.get_for_user(), Phase C12/D-b4-fix)
+  // and merge into `user` under the same campus_id/level_id keys
+  // getUserCampusId()/getUserLevelId() already read — so those two
+  // functions need zero changes. Role-bucketed the same substring-based
+  // way login/page.tsx's own redirect logic already does. Never blocks
+  // login: a failed or absent fetch just leaves campus/level unset, same
+  // as any role that doesn't have one (admin, org_admin, accounts_officer).
+  if (user && principal?.person_type === 'staff' && access) {
+    const roleText = String(user.role || '');
+    const meEndpoint = roleText.includes('coord') ? '/api/coordinators/me/'
+      : roleText.includes('teach') ? '/api/teachers/me/'
+      : roleText.includes('princip') ? '/api/principals/me/'
+      : null;
+    if (meEndpoint) {
+      try {
+        const base = getApiBaseUrl();
+        const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+        const meRes = await fetch(`${cleanBase}${meEndpoint}`, {
+          headers: { 'Authorization': `Bearer ${access}` },
+          credentials: 'omit',
+        });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          const campusId = meData?.campus ?? meData?.current_campus ?? null;
+          const levelId = meData?.level ?? null;
+          if (campusId !== null) user.campus_id = campusId;
+          if (levelId !== null) user.level_id = levelId;
+        }
+      } catch {
+        // Best-effort — login must not fail because the campus lookup did.
+      }
+    }
+  }
 
   const organization = principal ? {
     id: principal.tenant_id,

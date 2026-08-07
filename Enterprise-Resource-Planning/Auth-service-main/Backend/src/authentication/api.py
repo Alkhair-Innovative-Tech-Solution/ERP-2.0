@@ -8,7 +8,7 @@ Endpoints:
 - POST /api/auth/refresh - Refresh access token
 - GET /api/auth/me - Get current user info
 """
-from typing import Optional
+from typing import List, Optional
 from django.http import HttpRequest
 from ninja import Router, Schema
 from ninja.security import HttpBearer
@@ -18,6 +18,7 @@ from employees.models import Employee
 from permissions.models import ServiceAccess, Subscription
 from .models import UserCredentials, RefreshToken, BlacklistedToken
 from .superadmin_models import SuperAdmin
+from .nonstaff_models import NonStaffIdentity
 from .jwt_utils import (
     generate_access_token,
     generate_refresh_token,
@@ -260,10 +261,18 @@ def refresh_token(request: HttpRequest, payload: RefreshRequest):
                 "detail": "Token is invalid or expired"
             }
         
-        user_id, is_superadmin = verify_result
-        
-        # Check refresh token database
-        cred_filter = {'superadmin__id': user_id} if is_superadmin else {'employee__id': user_id}
+        user_id, is_superadmin, principal_type = verify_result
+
+        # Check refresh token database. principal_type == 'non_staff' (Phase
+        # D-b1) takes priority over is_superadmin, since a student token
+        # never carries is_superadmin=True anyway — this is a pure addition,
+        # the is_superadmin/employee branches below are unchanged.
+        if principal_type == 'non_staff':
+            cred_filter = {'non_staff_identity__id': user_id}
+        elif is_superadmin:
+            cred_filter = {'superadmin__id': user_id}
+        else:
+            cred_filter = {'employee__id': user_id}
         try:
             refresh_token_obj = RefreshToken.objects.get(
                 token=payload.refresh_token,
@@ -274,28 +283,30 @@ def refresh_token(request: HttpRequest, payload: RefreshRequest):
                 "error": "Invalid refresh token",
                 "detail": "Token not found in database"
             }
-        
+
         if not refresh_token_obj.is_valid():
             return 401, {
                 "error": "Invalid refresh token",
                 "detail": "Token has been revoked or expired"
             }
-        
+
         # Get user
-        if is_superadmin:
+        if principal_type == 'non_staff':
+            user = NonStaffIdentity.objects.get(id=user_id, is_active=True, is_deleted=False)
+        elif is_superadmin:
             user = SuperAdmin.objects.get(id=user_id, is_active=True)
         else:
             user = Employee.objects.get(id=user_id, is_active=True, is_deleted=False)
-        
+
         # Generate new access token
         new_access_token = generate_access_token(user)
-        
+
         return 200, {
             "access_token": new_access_token,
             "expires_in": 3600
         }
-    
-    except (Employee.DoesNotExist, SuperAdmin.DoesNotExist):
+
+    except (Employee.DoesNotExist, SuperAdmin.DoesNotExist, NonStaffIdentity.DoesNotExist):
         return 401, {
             "error": "User not found",
             "detail": "Account is inactive or deleted"
@@ -533,6 +544,156 @@ def login_vms(request: HttpRequest, payload: HdmsLoginRequest):
             "email": employee.email or "",
             "department": employee.department.dept_name if employee.department else "",
             "vms_role": role_type,
+        }
+    }
+
+
+# ================== Unified SMS Login Endpoint (Phase D-b1) ==================
+#
+# Gate for SMS's Phase D auth retirement: SMS's frontend currently logs in
+# against its own legacy auth-8001 (email + password, staff OR student
+# through one form). This endpoint is the central-auth-side equivalent —
+# ONE door, self-detecting principal type, so the eventual frontend adapter
+# doesn't need to know in advance whether an email belongs to a staff
+# Employee or a student NonStaffIdentity. See
+# docs/PHASE_D_B1_SMS_LOGIN_RESULT.md for the full design/proof.
+#
+# Response shape is deliberately central auth's own clean shape (access_token/
+# refresh_token/principal), NOT bent to match SMS's old access/refresh/user/
+# organization shape — the SMS frontend adapts to this in a later, separate
+# step (per the locked decision in the Phase D-b1 prompt).
+
+SMS_TENANT_CODE = "SMS01"
+
+
+class SmsLoginRequest(Schema):
+    email: str
+    password: str
+
+
+class SmsPrincipalOut(Schema):
+    user_id: str
+    person_type: str  # "staff" | "student"
+    full_name: str
+    email: str
+    tenant_id: Optional[str] = None
+    tenant_name: Optional[str] = None
+    role: Optional[str] = None
+    services: List[str] = []
+    perms: List[str] = []
+
+
+class SmsLoginResponse(Schema):
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    principal: SmsPrincipalOut
+
+
+@router.post("/login-sms", response={200: SmsLoginResponse, 401: ErrorResponse, 423: ErrorResponse})
+def login_sms(request: HttpRequest, payload: SmsLoginRequest):
+    """
+    Unified SMS login: email + password, resolving to EITHER a staff
+    Employee OR a student NonStaffIdentity in tenant SMS01 — one endpoint,
+    not two. Mirrors /login's credential-check, lockout, and token-issue
+    logic exactly (record_failed_login/record_successful_login via
+    UserCredentials); only principal resolution differs.
+
+    Resolution order (staff first, then student) — if the same email were
+    ever shared by both a SMS01 Employee and a SMS01 NonStaffIdentity (not
+    expected; nothing in the importers prevents it in principle), the staff
+    account wins and the student account is unreachable through this
+    endpoint. Not enforced/validated anywhere; documented here as the
+    defined behavior per the Phase D-b1 prompt's own instruction to "prefer
+    a defined order and note it."
+    """
+    principal = Employee.objects.filter(
+        tenant__tenant_code=SMS_TENANT_CODE,
+        org_email__iexact=payload.email,
+        is_active=True,
+        is_deleted=False,
+    ).first()
+    person_type = "staff"
+
+    if not principal:
+        principal = NonStaffIdentity.objects.filter(
+            tenant__tenant_code=SMS_TENANT_CODE,
+            email__iexact=payload.email,
+            is_active=True,
+            is_deleted=False,
+        ).first()
+        person_type = "student"
+
+    if not principal:
+        return 401, {
+            "error": "Invalid credentials",
+            "detail": "User not found or account inactive"
+        }
+
+    cred_filter = {'employee': principal} if person_type == "staff" else {'non_staff_identity': principal}
+    try:
+        credentials = UserCredentials.objects.get(**cred_filter, is_deleted=False)
+    except UserCredentials.DoesNotExist:
+        return 401, {
+            "error": "Invalid credentials",
+            "detail": "No credentials found for this user"
+        }
+
+    if credentials.is_locked():
+        return 423, {
+            "error": "Account locked",
+            "detail": f"Too many failed attempts. Try again after {credentials.locked_until}"
+        }
+
+    if not credentials.check_password(payload.password):
+        credentials.record_failed_login()
+        return 401, {
+            "error": "Invalid credentials",
+            "detail": "Incorrect password"
+        }
+
+    client_ip = request.META.get('REMOTE_ADDR')
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    credentials.record_successful_login(ip_address=client_ip)
+
+    access_token = generate_access_token(principal)
+    refresh_token_str = generate_refresh_token(principal)
+
+    refresh_kwargs = {'employee': principal} if person_type == "staff" else {'non_staff_identity': principal}
+    RefreshToken.objects.create(
+        **refresh_kwargs,
+        token=refresh_token_str,
+        expires_at=timezone.now() + timedelta(days=7),
+        device_info=user_agent[:255],
+        ip_address=client_ip
+    )
+
+    # Read authz claims back off the freshly-minted access token, rather
+    # than recomputing them, so the response can never drift from what's
+    # actually inside the token.
+    claims = decode_token(access_token)
+
+    if person_type == "staff":
+        role = principal.designation.position_name if principal.designation else None
+    else:
+        role = principal.role or None
+
+    tenant = principal.tenant
+
+    return 200, {
+        "access_token": access_token,
+        "refresh_token": refresh_token_str,
+        "expires_in": 3600,
+        "principal": {
+            "user_id": str(principal.id),
+            "person_type": person_type,
+            "full_name": principal.full_name,
+            "email": principal.email,
+            "tenant_id": claims.get("tenant_id"),
+            "tenant_name": tenant.name if tenant else None,
+            "role": role,
+            "services": claims.get("services", []),
+            "perms": claims.get("perms", []),
         }
     }
 

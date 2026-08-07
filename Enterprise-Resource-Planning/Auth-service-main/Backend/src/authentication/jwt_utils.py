@@ -154,7 +154,17 @@ def _build_authz_claims(user, is_superadmin: bool, principal_type: str = 'employ
 
 
 def generate_refresh_token(user) -> str:
-    """Generate JWT refresh token signed with RSA private key."""
+    """Generate JWT refresh token signed with RSA private key.
+
+    Phase D-b1: tags a non-staff (student) principal's refresh token with
+    `principal_type: 'non_staff'` — an additive claim, absent (not merely
+    False) on every employee/superadmin refresh token, so their payload is
+    byte-identical to before. This is the only way verify_refresh_token can
+    later tell a student refresh token apart from an employee one: unlike
+    the access token, this payload carries no `is_superadmin` claim at all
+    (pre-existing — see verify_refresh_token's docstring), so principal
+    type can't be inferred from that field either.
+    """
     payload = {
         'user_id': str(user.id),
         'code': getattr(user, 'superadmin_code', None) or getattr(user, 'employee_code', None),
@@ -163,6 +173,8 @@ def generate_refresh_token(user) -> str:
         'token_type': 'refresh',
         'jti': str(uuid.uuid4()),
     }
+    if _detect_principal_type(user) == 'non_staff':
+        payload['principal_type'] = 'non_staff'
     return jwt.encode(payload, JWT_PRIVATE_KEY, algorithm=JWT_ALGORITHM)
 
 
@@ -188,12 +200,25 @@ def verify_access_token(token: str):
 
 
 def verify_refresh_token(token: str):
-    """Verify refresh token. Returns (user_id, is_superadmin) or None."""
+    """Verify refresh token. Returns (user_id, is_superadmin, principal_type) or None.
+
+    principal_type is 'non_staff' for a student refresh token (see
+    generate_refresh_token), else 'employee' — that default also covers
+    superadmin tokens, since is_superadmin is a pre-existing no-op here
+    (generate_refresh_token's payload has never included an `is_superadmin`
+    claim, so this always reads back False regardless of principal; not
+    changed here — out of scope for Phase D-b1, flagged in
+    docs/PHASE_D_B1_SMS_LOGIN_RESULT.md instead of silently fixed).
+    """
     try:
         payload = decode_token(token)
         if payload.get('token_type') != 'refresh':
             return None
-        return payload.get('user_id'), payload.get('is_superadmin', False)
+        return (
+            payload.get('user_id'),
+            payload.get('is_superadmin', False),
+            payload.get('principal_type', 'employee'),
+        )
     except Exception:
         return None
 

@@ -182,7 +182,16 @@ class RefreshToken(models.Model):
         blank=True,
         help_text="SuperAdmin this token belongs to"
     )
-    
+
+    non_staff_identity = models.ForeignKey(
+        NonStaffIdentity,
+        on_delete=models.CASCADE,
+        related_name='refresh_tokens',
+        null=True,
+        blank=True,
+        help_text="Non-staff identity this token belongs to (e.g. SMS student) — Phase D-b1"
+    )
+
     token = models.TextField(
         unique=True,
         help_text="JWT token (RS256 tokens are ~700+ chars, TextField avoids length limit)"
@@ -222,6 +231,7 @@ class RefreshToken(models.Model):
         indexes = [
             models.Index(fields=['token']),
             models.Index(fields=['employee', 'is_revoked']),
+            models.Index(fields=['non_staff_identity', 'is_revoked']),
             models.Index(fields=['expires_at']),
         ]
 
@@ -230,6 +240,8 @@ class RefreshToken(models.Model):
             return f"Refresh token for {self.employee.employee_code}"
         if self.superadmin:
             return f"Refresh token for {self.superadmin.superadmin_code}"
+        if self.non_staff_identity:
+            return f"Refresh token for {self.non_staff_identity.identity_code}"
         return f"Refresh token #{self.id}"
     
     def is_expired(self):

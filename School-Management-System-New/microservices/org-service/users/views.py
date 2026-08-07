@@ -17,17 +17,29 @@ from .permissions import IsSuperAdmin, IsOrgAdmin, IsPrincipal, IsCoordinator, I
 from .validators import validate_password_strength
 from services.email_notification_service import EmailNotificationService
 from notifications.services import create_notification
+from central_auth.authentication import CentralAuthUser
+from org_service.dual_auth import DualServiceSubscribed, central_person_id, central_tenant_qs
 import secrets
 
 
 def _get_org(user):
-    """Return Organization instance for a _TokenUser (uses org_id) or a real User (uses .organization)."""
+    """Return Organization instance for a _TokenUser (uses org_id), a real
+    User (uses .organization), or an OrgCentralAuthUser (Phase C11: resolved
+    by matching Organization.tenant_id against the token's own tenant_id
+    claim — this model's tenant_id is a 1:1 mapping, not a per-row scoping
+    value, see the field's comment in models.py). Uses all_objects, not
+    .objects — OrganizationManager depends on OrganizationMiddleware's
+    thread-local context vars, which this lookup itself may be called
+    from before those vars are populated (see middleware.py)."""
     org = getattr(user, 'organization', None)
     if org is not None:
         return org
     org_id = getattr(user, 'org_id', None)
     if org_id:
-        return Organization.objects.filter(id=org_id).first()
+        return Organization.all_objects.filter(id=org_id).first()
+    tenant_id = getattr(user, 'tenant_id', None)
+    if tenant_id:
+        return Organization.all_objects.filter(tenant_id=tenant_id).first()
     return None
 
 
@@ -37,7 +49,14 @@ def _ensure_local_user(req_user):
     Admin users are created in auth-service only; we create a stub here so FK
     constraints (e.g. created_by) don't fail.
     Returns the local User instance or None.
+
+    Phase C11: a CentralAuthUser's .id is a UUID string, not an int — it
+    can never match this table's integer AutoField PK, so short-circuit
+    to None (no local User fork row exists for a central-auth actor;
+    callers stamp the parallel central_*_id column instead).
     """
+    if isinstance(req_user, CentralAuthUser):
+        return None
     local = User.objects.filter(id=req_user.id).first()
     if local:
         return local
@@ -1526,27 +1545,34 @@ class SubscriptionPlanListCreateView(generics.ListCreateAPIView):
     """
     List and create subscription plans (SuperAdmin only)
     """
-    permission_classes = [IsAuthenticated, (IsSuperAdmin | IsAdmin)]
+    permission_classes = [IsAuthenticated, (IsSuperAdmin | IsAdmin), DualServiceSubscribed]
     serializer_class = SubscriptionPlanSerializer
 
     def get_queryset(self):
+        # SubscriptionPlan.objects is a plain (non-org-scoped) manager —
+        # no C5-class hazard here, same result for every token type.
         user = self.request.user
         if user.is_superadmin():
             return SubscriptionPlan.objects.filter(is_active=True).order_by('max_students')
-        
-        if user.role == 'admin':
+
+        if not isinstance(user, CentralAuthUser) and user.role == 'admin':
             # Partner Admin: Show SuperAdmin's plans (created_by is null) AND their own
             from django.db.models import Q
             return SubscriptionPlan.objects.filter(
                 Q(created_by__isnull=True) | Q(created_by_id=user.id),
                 is_active=True
             ).order_by('max_students')
-            
+
         return SubscriptionPlan.objects.filter(is_active=True).order_by('max_students')
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.is_superadmin():
+        if isinstance(user, CentralAuthUser):
+            # Only IsSuperAdmin can reach here for a central token (IsAdmin
+            # fails closed, see org_service/dual_auth.py) — is_superadmin()
+            # is always True at this point.
+            serializer.save(created_by=None, central_created_by_id=central_person_id(user))
+        elif user.is_superadmin():
             serializer.save(created_by=None)
         else:
             local_user = _ensure_local_user(user)
@@ -1581,9 +1607,25 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/organizations/       -> List all organizations (SuperAdmin only)
     POST /api/organizations/       -> Create new organization + its admin user
+
+    Phase C11: found live during the audit — this view had NO
+    permission_classes at all (inherited the bare [IsAuthenticated]
+    default), unlike its sibling OrganizationDetailView right below,
+    which already gates on (IsSuperAdmin | IsAdmin). get_queryset()'s own
+    role-branching already implied superadmin/admin-only (anyone else got
+    `.none()`), so this was a genuine gap: any authenticated user —
+    including, once central-auth was wired in, a central token with no
+    matching role at all — could reach perform_create() and its
+    `created_by_id=user.id` fallback, which would crash on a CentralAuthUser
+    (UUID into an integer FK column). Fixed to match the Detail view's
+    existing gate — same fix needed for legacy too, not central-auth-only.
     """
+    permission_classes = [IsAuthenticated, (IsSuperAdmin | IsAdmin), DualServiceSubscribed]
+
     def get_queryset(self):
         user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            return central_tenant_qs(Organization.all_objects, user).order_by('-created_at')
         if user.role == 'superadmin':
             return Organization.all_objects.all().order_by('-created_at')
         if user.role == 'admin':
@@ -1597,6 +1639,11 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
+        # Only IsSuperAdmin can reach here for a central token (IsAdmin
+        # fails closed, see org_service/dual_auth.py) — is_superadmin()
+        # is always True at this point for a CentralAuthUser.
+        if isinstance(user, CentralAuthUser):
+            return serializer.save(created_by=None)
         # Superadmin creates system-level orgs (created_by=None).
         # Admin uses their ID directly to avoid FK lookup on _TokenUser.
         if user.is_superadmin():
@@ -1635,10 +1682,12 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
     PATCH  /api/organizations/<id>/  -> Update quotas or name
     DELETE /api/organizations/<id>/  -> Delete organization
     """
-    permission_classes = [IsAuthenticated, (IsSuperAdmin | IsAdmin)]
-    
+    permission_classes = [IsAuthenticated, (IsSuperAdmin | IsAdmin), DualServiceSubscribed]
+
     def get_queryset(self):
         user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            return central_tenant_qs(Organization.all_objects, user)
         if user.role == 'superadmin':
             return Organization.all_objects.all()
         if user.role == 'admin':
@@ -2337,6 +2386,12 @@ class InvoiceListView(generics.ListAPIView):
     def get_queryset(self):
         from .models import Invoice
         user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            # org_admin-equivalent not resolvable for central tokens yet
+            # (see org_service/dual_auth.py) — superadmin only for now.
+            if user.is_superadmin:
+                return Invoice.objects.select_related('organization', 'plan', 'approved_by').all()
+            return Invoice.objects.none()
         if user.role == 'superadmin':
             return Invoice.objects.select_related('organization', 'plan', 'approved_by').all()
         if user.role == 'admin':
@@ -2355,6 +2410,10 @@ class InvoiceDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         from .models import Invoice
         user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            if user.is_superadmin:
+                return Invoice.objects.all()
+            return Invoice.objects.none()
         if user.role == 'superadmin':
             return Invoice.objects.all()
         if user.role == 'admin':

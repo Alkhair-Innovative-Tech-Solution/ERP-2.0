@@ -65,7 +65,17 @@ AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["org_service.dual_auth.DualAuthentication"],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # Phase C11: DualServiceSubscribed here (rather than hand-added to
+    # every view) is a no-op for legacy tokens and covers every endpoint
+    # that relies on the bare default (most of them — see
+    # docs/PHASE_C11_ORG_SERVICE_RESULT.md's endpoint map). Views that set
+    # their own explicit permission_classes (DRF replaces, not appends,
+    # the default list) needed DualServiceSubscribed added by hand where
+    # touched this phase.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+        "org_service.dual_auth.DualServiceSubscribed",
+    ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",

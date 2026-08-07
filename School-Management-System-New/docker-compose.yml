@@ -353,6 +353,10 @@ services:
       DB_PASSWORD: ${ORG_DB_PASS:-org_pass}
       REDIS_URL: redis://redis:6379/2
       AUTH_SERVICE_URL: http://auth-service:8001
+      # Phase C11: central-auth JWKS verification — distinct from
+      # AUTH_SERVICE_URL above (that one is the legacy org/user-sync
+      # service on :8001, unrelated to central auth).
+      CENTRAL_AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
       postgres-org:
         condition: service_healthy

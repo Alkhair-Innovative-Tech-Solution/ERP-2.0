@@ -110,7 +110,20 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             req_user = request.user
-            if req_user.is_superadmin():
+            from central_auth.authentication import CentralAuthUser
+            if isinstance(req_user, CentralAuthUser):
+                # Phase C11: org-CREATE via central-auth stamps the
+                # creator's own identity, but NOT tenant_id — there is no
+                # source of truth here for "which central-auth tenant does
+                # this brand-new org belong to" (the creating superadmin's
+                # own tenant_id isn't necessarily the new org's tenant, and
+                # OrganizationCreateSerializer has no field to carry a
+                # target tenant explicitly). Flagged as a gap for a future
+                # provisioning-flow phase; tenant_id stays NULL here.
+                from org_service.dual_auth import central_person_id
+                validated_data['created_by'] = None
+                validated_data['central_created_by_id'] = central_person_id(req_user)
+            elif req_user.is_superadmin():
                 validated_data['created_by'] = None
             else:
                 from users.views import _ensure_local_user

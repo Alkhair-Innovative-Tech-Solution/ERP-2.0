@@ -64,13 +64,35 @@ DATABASES = {
 AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["ams_shared.jwt.validator.ServiceJWTAuthentication"],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["org_service.dual_auth.DualAuthentication"],
+    # Phase C11: DualServiceSubscribed here (rather than hand-added to
+    # every view) is a no-op for legacy tokens and covers every endpoint
+    # that relies on the bare default (most of them — see
+    # docs/PHASE_C11_ORG_SERVICE_RESULT.md's endpoint map). Views that set
+    # their own explicit permission_classes (DRF replaces, not appends,
+    # the default list) needed DualServiceSubscribed added by hand where
+    # touched this phase.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+        "org_service.dual_auth.DualServiceSubscribed",
+    ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
     ],
 }
+
+# Phase C11: central_auth/jwks.py reads settings.AUTH_SERVICE_URL — this
+# service ALREADY has its own `AUTH_SERVICE_URL` env var (read directly via
+# os.environ.get(...) in views.py/serializers.py, pointing at the LEGACY
+# org/user-sync service on :8001 — a third, separate service, not central
+# auth). Reusing that same env var name here would silently repoint those
+# legacy sync calls at the wrong service. CENTRAL_AUTH_SERVICE_URL is a
+# deliberately distinct env var name feeding the Django *setting* named
+# AUTH_SERVICE_URL (which only central_auth/jwks.py reads, via
+# getattr(settings, 'AUTH_SERVICE_URL', ...)) — the raw env var used
+# elsewhere in this service is untouched.
+AUTH_SERVICE_URL = os.getenv("CENTRAL_AUTH_SERVICE_URL", "http://host.docker.internal:8000")
 
 CACHES = {
     "default": {

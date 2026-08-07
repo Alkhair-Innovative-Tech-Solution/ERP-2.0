@@ -14,3 +14,6 @@ pika
 Pillow
 requests
 ams-shared @ file:///app/ams-shared
+# Phase C11: central_auth/jwks.py needs cryptography (RSA key parsing).
+# PyJWT is already pulled in transitively by djangorestframework-simplejwt.
+cryptography==42.0.5

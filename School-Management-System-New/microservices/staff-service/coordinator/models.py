@@ -48,9 +48,16 @@ class CoordinatorManager(OrganizationManager):
 class Coordinator(models.Model):
     # Custom manager
     objects = CoordinatorManager()
+    # Phase C12: unfiltered — the C5-class hazard (no bypass existed).
+    all_objects = models.Manager()
 
     # User Account
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='coordinator_profile')
+    # Phase C12: exact legacy_user_id -> central Employee.id remap — see
+    # teachers/models.py's Teacher.central_user_id comment (identical
+    # shape/rationale).
+    central_user_id = models.UUIDField(null=True, blank=True, db_index=True)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     # Organization
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='coordinators')
@@ -307,12 +314,21 @@ class Coordinator(models.Model):
     @classmethod
     def get_for_user(cls, user):
         """
-        Robust lookup: try employee_code == user.username, then email == user.email.
-        Returns a Coordinator instance or None. This avoids raising DoesNotExist
-        when data isn't perfectly aligned and centralizes the lookup logic.
+        Phase C12: for a central-auth actor, resolved via the exact
+        central_user_id match — see Principal.get_for_user's identical
+        comment for why the fuzzy fallback below is never used for a
+        central token.
+        Legacy: robust lookup: try employee_code == user.username, then
+        email == user.email. Returns a Coordinator instance or None. This
+        avoids raising DoesNotExist when data isn't perfectly aligned and
+        centralizes the lookup logic.
         """
         if not user:
             return None
+
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            return cls.all_objects.filter(central_user_id=user.id).first()
 
         # Try employee_code first (legacy behaviour)
         try:

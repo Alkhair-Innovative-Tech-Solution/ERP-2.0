@@ -64,9 +64,16 @@ class PrincipalManager(OrganizationManager):
 class Principal(models.Model):
     # Custom manager
     objects = PrincipalManager()
+    # Phase C12: unfiltered — the C5-class hazard (no bypass existed).
+    all_objects = models.Manager()
     # User relationship
     user = models.OneToOneField(User, on_delete=models.SET_NULL, related_name='principal_profile', null=True, blank=True)
-    
+    # Phase C12: exact legacy_user_id -> central Employee.id remap — see
+    # teachers/models.py's Teacher.central_user_id comment (identical
+    # shape/rationale).
+    central_user_id = models.UUIDField(null=True, blank=True, db_index=True)
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     # Organization
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='principals')
     
@@ -254,11 +261,21 @@ class Principal(models.Model):
     @classmethod
     def get_for_user(cls, user):
         """
-        Robust lookup: try employee_code == user.username, then email == user.email.
-        Returns a Principal instance or None.
+        Phase C12: for a central-auth actor, resolved via the exact
+        central_user_id match (never the fuzzy username/email fallback
+        below — that fallback matches a CENTRAL employee_code/email
+        against a LOCAL Principal.employee_code/email, two unrelated ID
+        spaces, which is exactly the "fuzzy" matching this phase's prompt
+        says never to use for identity).
+        Legacy: robust lookup: try employee_code == user.username, then
+        email == user.email. Returns a Principal instance or None.
         """
         if not user:
             return None
+
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            return cls.all_objects.filter(central_user_id=user.id).first()
 
         try:
             obj = cls.objects.filter(employee_code=user.username).first()

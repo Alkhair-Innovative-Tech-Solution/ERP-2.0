@@ -67,11 +67,42 @@ DATABASES = {
         "HOST": os.getenv("DB_HOST", "postgres-staff"),
         "PORT": os.getenv("DB_PORT", "5432"),
         "CONN_MAX_AGE": 60,
-    }
+    },
+    # Phase C12: the assign_teacher-hang fix. teachers/signals.py's
+    # _sync_class_teacher_to_campus_db previously opened its own ad-hoc
+    # `psycopg2.connect()` per m2m change, with no statement/lock timeout —
+    # a lock held on campus-service's own tables (or a slow/unreachable
+    # host) blocked that call, and gunicorn's sync worker, forever ("hangs
+    # until killed"). This alias gives the exact same target DB a real,
+    # Django-managed connection instead: pooled/lifecycle-managed by
+    # Django rather than a bespoke connect()-per-call, AND — the actual
+    # fix for the hang itself — a hard 5s statement_timeout / 3s
+    # lock_timeout, so a blocked query is forcibly killed instead of
+    # hanging indefinitely. See teachers/signals.py's updated
+    # _sync_class_teacher_to_campus_db for the query using it (unchanged
+    # SQL — see that file's comment for why raw SQL was kept rather than
+    # switched to the ORM's QuerySet API).
+    "campus_db": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("CAMPUS_DB_NAME", "campus_db"),
+        "USER": os.getenv("CAMPUS_DB_USER", "campus_user"),
+        "PASSWORD": os.getenv("CAMPUS_DB_PASSWORD", "campus_pass"),
+        "HOST": os.getenv("CAMPUS_DB_HOST", "postgres-campus"),
+        "PORT": os.getenv("CAMPUS_DB_PORT", "5432"),
+        "CONN_MAX_AGE": 60,
+        "CONNECT_TIMEOUT": 3,
+        "OPTIONS": {
+            "options": "-c statement_timeout=5000 -c lock_timeout=3000",
+        },
+    },
 }
+# No DATABASE_ROUTERS entry for 'campus_db' — deliberately not
+# auto-routed. Every staff-service model (Teacher, ClassRoom, etc.)
+# continues to use 'default' unless a call site explicitly passes
+# using='campus_db' (only teachers/signals.py does).
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["ams_shared.jwt.validator.ServiceJWTAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["staff_service.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -82,6 +113,17 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 100,
     "EXCEPTION_HANDLER": "utils.exceptions.custom_exception_handler",
 }
+
+# Phase C12: used only by teachers/management/commands/remap_central_user_ids.py
+# — a direct, offline, one-time (re-runnable) cross-database read of
+# auth-service's employees_employee table, exact same pattern/rationale
+# as Phase C8 (student-service)'s identical command; see that file's own
+# docstring for why a direct DB connection instead of an HTTP call.
+CENTRAL_AUTH_DB_HOST = os.getenv("CENTRAL_AUTH_DB_HOST", "host.docker.internal")
+CENTRAL_AUTH_DB_PORT = os.getenv("CENTRAL_AUTH_DB_PORT", "5432")
+CENTRAL_AUTH_DB_NAME = os.getenv("CENTRAL_AUTH_DB_NAME", "auth_db")
+CENTRAL_AUTH_DB_USER = os.getenv("CENTRAL_AUTH_DB_USER", "erp_admin")
+CENTRAL_AUTH_DB_PASSWORD = os.getenv("CENTRAL_AUTH_DB_PASSWORD", "")
 
 CACHES = {
     "default": {
@@ -105,7 +147,21 @@ INTERNAL_SERVICE_SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001")
+# NOTE: this Django *setting* (AUTH_SERVICE_URL) was, before Phase C12,
+# an orphaned mirror of the raw AUTH_SERVICE_URL env var — confirmed
+# nothing in this codebase ever read `settings.AUTH_SERVICE_URL`;
+# sync_staff_to_auth.py and user_creation_service.py both read the raw
+# env var directly via os.getenv(). Phase C12's central_auth/jwks.py is
+# the first thing that actually consults this Django setting (hardcoded
+# `getattr(settings, 'AUTH_SERVICE_URL', ...)`, part of the unchanged
+# template) — and it needs to mean the CENTRAL auth-service (:8000), not
+# the legacy org/user-sync one (:8001) that the raw env var of the same
+# name points at everywhere else in this service. Repointed to reuse
+# Phase B4's existing CENTRAL_AUTH_URL env var (services/
+# central_auth_sync_service.py already points it at the same central
+# auth-service) instead of the raw AUTH_SERVICE_URL env var, which — and
+# every other file that reads it directly — stays untouched.
+AUTH_SERVICE_URL = os.getenv("CENTRAL_AUTH_URL", "http://host.docker.internal:8000")
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")

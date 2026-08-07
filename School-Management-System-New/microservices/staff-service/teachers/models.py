@@ -65,10 +65,26 @@ class TeacherManager(OrganizationManager):
 class Teacher(models.Model):
     # Custom manager
     objects = TeacherManager()
-    
+    # Phase C12: unfiltered — the C5-class hazard (this model had no
+    # bypass for OrganizationManager's thread-local dependency at all).
+    all_objects = models.Manager()
+
     # User Account
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='teacher_profile')
-    
+    # Phase C12: exact legacy_user_id -> central Employee.id remap (never
+    # fuzzy — see management/commands/remap_central_user_ids.py). NULL
+    # until remapped; a central-auth request resolves its own Teacher
+    # profile via this field, not the existing username/employee_code
+    # fuzzy-match fallback (see teachers/views.py's my_classes/etc, which
+    # is legacy-only and unchanged).
+    central_user_id = models.UUIDField(null=True, blank=True, db_index=True)
+    # tenant_id: additive, nullable — central-path read scoping (see
+    # staff_service/dual_auth.py's central_tenant_qs). Stamped on create
+    # for a central-auth actor's own new Teacher rows; NULL for
+    # legacy-created/pre-migration rows (included permissively by
+    # central_tenant_qs, same precedent as C1-C11).
+    tenant_id = models.UUIDField(null=True, blank=True, db_index=True)
+
     # Organization
     organization = models.ForeignKey('users.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='teachers')
     
@@ -229,6 +245,11 @@ class Teacher(models.Model):
         related_name='teacher_assignments_made',
         help_text="User who assigned this teacher to classroom"
     )
+    # Phase C12: classroom_assigned_by is a simple audit person-FK (the
+    # ACTOR who made the assignment) — a central-auth actor can't be
+    # assigned to it directly, same shape as every prior phase's acting-
+    # user audit field.
+    central_classroom_assigned_by_id = models.UUIDField(null=True, blank=True, db_index=True)
     classroom_assigned_at = models.DateTimeField(null=True, blank=True)
     
     def save(self, *args, **kwargs):
@@ -457,7 +478,34 @@ class Teacher(models.Model):
 
         except Exception as e:
             print(f"Error: {str(e)}")
-    
+
+    @classmethod
+    def get_for_user(cls, user):
+        """
+        Phase C12: for a central-auth actor, resolved via the exact
+        central_user_id match. Legacy: unchanged — teachers/views.py's own
+        `getattr(user, 'teacher_profile', None)` / `employee_code == user.
+        username` fallback pattern (see e.g. my_classes) is untouched;
+        this classmethod is used by the NEW central-auth call sites this
+        phase adds, mirroring Principal.get_for_user/Coordinator.get_for_user's
+        identical shape (Teacher never had one before this phase — it
+        used an inline pattern in each view instead).
+        """
+        if not user:
+            return None
+
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            return cls.all_objects.filter(central_user_id=user.id).first()
+
+        teacher = getattr(user, 'teacher_profile', None)
+        if teacher:
+            return teacher
+        try:
+            return cls.objects.filter(employee_code=user.username).first()
+        except Exception:
+            return None
+
     def soft_delete(self):
         """Soft delete the teacher - uses update() to bypass signals"""
         import logging

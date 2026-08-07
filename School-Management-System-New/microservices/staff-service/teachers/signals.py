@@ -154,19 +154,42 @@ def delete_user_when_teacher_deleted(sender, instance, **kwargs):
         print(f"[ERROR] Error deleting teacher user: {str(e)}")
 
 def _sync_class_teacher_to_campus_db(action, teacher_id, pk_set):
-    """Push class_teacher_id changes to campus-service DB, upserting teacher row first."""
-    import os
-    import psycopg2
-    import psycopg2.extras
+    """Push class_teacher_id changes to campus-service DB, upserting teacher row first.
+
+    Phase C12 (the assign_teacher-hang fix): this used to open its own
+    ad-hoc `psycopg2.connect()` per call, with no statement/lock timeout —
+    if campus-service's tables were locked (or the host was slow/
+    unreachable past the initial connect), the blocking `cur.execute(...)`
+    call had no bound and could hang the whole gunicorn sync worker
+    indefinitely ("hangs until killed", flagged in C5).
+
+    Fixed by routing through Django's OWN connection framework instead —
+    `django.db.connections['campus_db']` (a real second database alias,
+    see staff_service/settings.py's DATABASES — CONN_MAX_AGE-pooled,
+    lifecycle-managed by Django rather than a bespoke connect()/close()
+    pair) — with a hard 5s statement_timeout / 3s lock_timeout set on
+    that alias's connection OPTIONS. A blocked query is now forcibly
+    killed by Postgres itself after 3-5s and raises a normal Python
+    exception, caught by the existing try/except below exactly as any
+    other failure already was — it can no longer hang the worker.
+
+    The SQL itself is UNCHANGED (still raw, still the exact same
+    statements) — deliberately not rewritten as ORM QuerySet calls.
+    campus-service's `teachers_teacher` table is a narrower, independently
+    -migrated schema (fewer columns than staff-service's own authoritative
+    Teacher model — confirmed by reading campus-service's classes/views.py,
+    which has its own central-auth-era columns staff-service's vendored
+    Teacher/ClassRoom copies don't). Django's high-level `.save()`/
+    `.create()` would attempt to write EVERY field on the model, which
+    would break against that narrower table; the existing raw SQL already
+    hand-picks the exact column set the target table actually has. Keeping
+    it raw (just on a managed connection now) preserves the exact same
+    data effect with no risk of a schema-mismatch regression.
+    """
     from django.db import connection as local_conn
+    from django.db import connections
     try:
-        conn = psycopg2.connect(
-            host=os.getenv('CAMPUS_DB_HOST', 'postgres-campus'),
-            dbname=os.getenv('CAMPUS_DB_NAME', 'campus_db'),
-            user=os.getenv('CAMPUS_DB_USER', 'campus_user'),
-            password=os.getenv('CAMPUS_DB_PASSWORD', 'campus_pass'),
-            connect_timeout=3,
-        )
+        conn = connections['campus_db']
         with conn.cursor() as cur:
             if action == 'post_add' and pk_set:
                 # Fetch teacher data from local staff DB to upsert into campus DB
@@ -209,7 +232,6 @@ def _sync_class_teacher_to_campus_db(action, teacher_id, pk_set):
                     [teacher_id]
                 )
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[WARN] _sync_class_teacher_to_campus_db: {e}")
 

@@ -9,6 +9,8 @@ from teachers.models import Teacher
 from students.models import Student, FormOption
 from classes.models import ClassRoom
 from django.db.models import Count, Q
+from central_auth.authentication import CentralAuthUser
+from staff_service.dual_auth import DualServiceSubscribed, central_person_id, central_tenant_qs
 import logging
 
 
@@ -52,20 +54,37 @@ logger = logging.getLogger(__name__)
 class CoordinatorViewSet(viewsets.ModelViewSet):
     queryset = Coordinator.objects.all()
     serializer_class = CoordinatorSerializer
-    permission_classes = [permissions.IsAuthenticated, IsNotDonorForWrites]
-    
+    permission_classes = [permissions.IsAuthenticated, IsNotDonorForWrites, DualServiceSubscribed]
+
     # Filtering, search, and ordering
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = CoordinatorFilter
     search_fields = ['full_name', 'employee_code', 'email']
     ordering_fields = ['full_name', 'joining_date', 'employee_code']
     ordering = ['-joining_date']  # Default ordering
-    
+
+    def get_queryset(self):
+        # Phase C12: central-path tenant scoping via Coordinator's own
+        # tenant_id — same rationale as TeacherViewSet.get_queryset (see
+        # that file's comment). The class-level `queryset = Coordinator.
+        # objects.all()` (OrganizationManager, thread-local-dependent) is
+        # otherwise used unchanged for legacy — no override existed here
+        # before this phase.
+        user = self.request.user
+        if isinstance(user, CentralAuthUser):
+            return central_tenant_qs(Coordinator.all_objects, user)
+        return Coordinator.objects.all()
+
     def perform_create(self, serializer):
         """Set actor and organization before creating coordinator"""
         user = self.request.user
         save_kwargs = {}
-        if not user.is_superadmin():
+        if isinstance(user, CentralAuthUser):
+            # Phase C12: stamp tenant_id for a central-auth actor —
+            # organization stays unset (no tenant_id column to resolve
+            # one from, see get_queryset's comment above).
+            save_kwargs['tenant_id'] = user.tenant_id
+        elif not user.is_superadmin():
             org = getattr(user, 'organization', None)
             if not org:
                 org_id = getattr(user, 'org_id', None)

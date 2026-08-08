@@ -15,7 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/permissions"
-import { apiGet } from "@/lib/api"
+import { getCurrentUserProfile } from "@/lib/api"
 import { useRouter } from "next/navigation"
 import { SmartAvatar } from "@/components/ui/smart-avatar"
 
@@ -89,7 +89,11 @@ export function UserProfilePopup() {
     syncFromStorage()
     const fetchNavPhoto = async () => {
       try {
-        const fresh = await apiGet("/api/current-user/") as any
+        // Phase D-blockers-clear: getCurrentUserProfile() is central-auth-aware
+        // (see lib/api.ts) — under central, returns the stored sis_user with
+        // no network call, since auth-8001 (the only source of a `photo`
+        // field) isn't reachable/relevant for a central session.
+        const fresh = await getCurrentUserProfile() as any
         if (!fresh) return
         const photo = fresh?.photo || fresh?.profile_image || null
         setNavPhoto(photo)
@@ -123,7 +127,7 @@ export function UserProfilePopup() {
   const fetchProfile = async () => {
     try {
       setLoading(true)
-      const data = await apiGet("/api/current-user/") as UserProfile
+      const data = await getCurrentUserProfile() as UserProfile
       setUserProfile(data)
       const photo = data?.photo || data?.profile_image || null
       if (photo) setNavPhoto(photo)

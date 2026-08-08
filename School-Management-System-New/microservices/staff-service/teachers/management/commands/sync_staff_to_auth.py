@@ -1,4 +1,3 @@
-import os
 from django.core.management.base import BaseCommand
 from django.contrib.auth.hashers import make_password
 from django.db import connection
@@ -89,7 +88,7 @@ def _create_local_user(email, username, full_name, role, org_id, campus_id, phon
 
 
 class Command(BaseCommand):
-    help = "Sync existing staff (principals, teachers, coordinators) to auth-service"
+    help = "Sync existing staff (principals, teachers, coordinators) to central auth"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -106,7 +105,7 @@ class Command(BaseCommand):
         rows = _fetch_all_staff(staff_type)
         self.stdout.write(f"Found {len(rows)} staff records.")
 
-        ok = skipped = failed = 0
+        ok = skipped = 0
 
         for role, (sid, full_name, email, employee_code, org_id, org_name, code_prefix, code_pattern) in rows:
             label = f"{role} {full_name} ({email})"
@@ -139,33 +138,6 @@ class Command(BaseCommand):
                 self.stdout.write(f"[LOCAL] Creating local user for {label}")
                 _create_local_user(email, employee_code, full_name, role, org_id, campus_id, phone)
 
-            # Build org_data for auth-service
-            org_data = None
-            if org_id:
-                org_data = {
-                    "id": org_id,
-                    "name": org_name or f"Org-{org_id}",
-                    "code_prefix": code_prefix,
-                    "code_pattern": code_pattern or "PREFIX_SEQ4",
-                }
-
-            name_parts = (full_name or "").strip().split(" ", 1)
-            success, msg = _sync_to_auth(
-                email=email,
-                username=employee_code,
-                first_name=name_parts[0],
-                last_name=name_parts[1] if len(name_parts) > 1 else "",
-                role=role,
-                org_data=org_data,
-            )
-
-            if success:
-                self.stdout.write(self.style.SUCCESS(f"[AUTH]  {label} → {msg}"))
-                ok += 1
-            else:
-                self.stdout.write(self.style.ERROR(f"[FAIL]  {label} → {msg}"))
-                failed += 1
-
             # Phase B4 dual-write: also land this identity in central
             # auth's SMS01 tenant — no-ops unless SYNC_TO_CENTRAL_AUTH=true.
             # Carry the REAL local password hash (not DEFAULT_PASSWORD
@@ -191,7 +163,8 @@ class Command(BaseCommand):
             )
             if ca_ok:
                 self.stdout.write(self.style.SUCCESS(f"[CENTRAL-AUTH] {label} → {ca_msg}"))
+                ok += 1
             elif "disabled" not in ca_msg:
                 self.stdout.write(self.style.WARNING(f"[CENTRAL-AUTH] {label} → {ca_msg}"))
 
-        self.stdout.write(f"\nDone: {ok} synced, {skipped} skipped, {failed} failed.")
+        self.stdout.write(f"\nDone: {ok} synced, {skipped} skipped.")

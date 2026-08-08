@@ -549,11 +549,7 @@ def _sync_students_to_attendance():
 def _ensure_student_user_account(student):
     if not student.student_id:
         return
-    import os, requests as req_lib
     actual_email = student.email if student.email else f"{student.student_id}@student.portal"
-    auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-    secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-    org = student.organization
     # Sync auto-generated email back to Student record so profile page shows it
     if not student.email:
         try:
@@ -561,37 +557,11 @@ def _ensure_student_user_account(student):
             student.email = actual_email
         except Exception:
             pass
-    payload = {
-        'username': student.student_id,
-        'email': actual_email,
-        'password': '12345',
-        'role': 'student',
-        'has_changed_default_password': False,
-        'is_verified': True,
-        'campus_id': student.campus_id,
-        'organization': {
-            'id': org.pk,
-            'name': org.name,
-            'code_prefix': getattr(org, 'code_prefix', None),
-        } if org else None,
-    }
-    # Phase D-R2: flag-gated off by default in this environment (see
-    # user_creation_service.py's identical WRITE_TO_AUTH_8001 gate). The
-    # central dual-write added in Phase D-R0 (below) already covers this.
-    if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
-        print(f"[BULK STUDENT USER] Skipped auth-service for {student.student_id} (WRITE_TO_AUTH_8001=false)")
-    else:
-        try:
-            resp = req_lib.post(
-                f"{auth_url}/api/internal/create-user/",
-                json=payload,
-                headers={'X-Internal-Secret': secret},
-                timeout=5,
-            )
-            if resp.status_code not in (200, 201, 409):
-                print(f"[BULK STUDENT USER] Auth-service error for {student.student_id}: {resp.status_code} {resp.text}")
-        except Exception as e:
-            print(f"[BULK STUDENT USER] Could not reach auth-service for {student.student_id}: {e}")
+
+    # Phase D-R6: the auth-8001 write (POST /api/internal/create-user/,
+    # flag-gated by WRITE_TO_AUTH_8001) is removed — auth-8001 no longer
+    # exists (D-R5). The central dual-write below already covers this. See
+    # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
     # Phase D-R0 dual-write: also land this student in central auth's SMS01
     # tenant, flag-gated on SYNC_TO_CENTRAL_AUTH (same flag as every other

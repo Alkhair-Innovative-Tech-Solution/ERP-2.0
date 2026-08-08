@@ -2,8 +2,6 @@ import json
 import jwt as pyjwt
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from ams_shared.jwt.validator import verify_token, _TokenUser
-from rest_framework.exceptions import AuthenticationFailed
 from central_auth.authentication import CentralAuthUser
 from central_auth.jwks import JWKSUnavailable, get_signing_key
 import psutil
@@ -96,13 +94,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def authenticate_user(self, token):
         """Authenticate user from JWT token.
 
-        Phase C7 bonus fix: this only did HS256 (legacy) verification —
-        a central-auth RS256 token would fail `verify_token` entirely,
-        silently breaking real-time WebSocket delivery for central-auth
-        users. Routes on the token's own `alg` header, mirroring
-        notification_service.dual_auth.DualAuthentication's REST-layer
-        dispatch. Verified by code inspection only (no live WS test client
-        available for the C7 proof — see docs/PHASE_C7_NOTIFICATION_SERVICE_RESULT.md).
+        Phase D-R4: HS256 (legacy verify_token/_TokenUser) verification
+        removed — central auth (RS256, via JWKS) is the only live path.
+        See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
         Note: authenticating successfully here does not yet mean a
         central-auth user will actually RECEIVE anything — no code path in
@@ -118,25 +112,17 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             print(f"WebSocket authentication error: malformed token ({e})")
             return None
 
-        if header.get('alg') == 'RS256':
-            try:
-                public_key = get_signing_key(header.get('kid'))
-                claims = pyjwt.decode(token, key=public_key, algorithms=['RS256'])
-                if claims.get('token_type') != 'access':
-                    print("WebSocket authentication error: not an access token")
-                    return None
-                return CentralAuthUser(claims)
-            except JWKSUnavailable as e:
-                print(f"WebSocket authentication error: signing key unavailable ({e})")
-                return None
-            except (pyjwt.InvalidTokenError, Exception) as e:
-                print(f"WebSocket authentication error: {e}")
-                return None
-
         try:
-            payload = verify_token(token)
-            return _TokenUser(payload)
-        except (AuthenticationFailed, Exception) as e:
+            public_key = get_signing_key(header.get('kid'))
+            claims = pyjwt.decode(token, key=public_key, algorithms=['RS256'])
+            if claims.get('token_type') != 'access':
+                print("WebSocket authentication error: not an access token")
+                return None
+            return CentralAuthUser(claims)
+        except JWKSUnavailable as e:
+            print(f"WebSocket authentication error: signing key unavailable ({e})")
+            return None
+        except (pyjwt.InvalidTokenError, Exception) as e:
             print(f"WebSocket authentication error: {e}")
             return None
 
@@ -161,7 +147,12 @@ class MonitoringConsumer(AsyncWebsocketConsumer):
         from .consumers import NotificationConsumer
         # Reuse authenticate_user logic (simplified here or we could refactor)
         user = await self.authenticate_user_local(token)
-        if not user or user.role not in ['superadmin', 'admin']:
+        # Phase D-R4: 'admin'-role gate removed along with HS256 — a
+        # central-auth token has no role/admin-tier claim (same
+        # unresolvable gap flagged throughout D-R4's dual_auth.py edits),
+        # so this now fails closed to is_superadmin only. See
+        # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
+        if not user or not getattr(user, 'is_superadmin', False):
             await self.close(code=4003)
             return
 
@@ -439,38 +430,42 @@ class MonitoringConsumer(AsyncWebsocketConsumer):
                 await asyncio.sleep(10)
 
     async def authenticate_user_local(self, token):
-        """Authenticate user from JWT token using shared stateless validator."""
+        """Authenticate user from JWT token.
+
+        Phase D-R4: HS256 (legacy verify_token/_TokenUser) verification
+        removed — central auth (RS256, via JWKS) is the only live path,
+        same as NotificationConsumer.authenticate_user above. Previously
+        this method had NO central-auth branch at all (HS256-only), which
+        meant a central-auth superadmin could never open this monitoring
+        socket post-cutover — a pre-existing gap, not something this
+        change introduces. See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
+        """
         try:
-            payload = verify_token(token)
-            return _TokenUser(payload)
-        except (AuthenticationFailed, Exception):
+            header = pyjwt.get_unverified_header(token)
+            public_key = get_signing_key(header.get('kid'))
+            claims = pyjwt.decode(token, key=public_key, algorithms=['RS256'])
+            if claims.get('token_type') != 'access':
+                return None
+            return CentralAuthUser(claims)
+        except (JWKSUnavailable, pyjwt.InvalidTokenError, Exception):
             return None
 
     async def log_message(self, event):
-        """Receive log message from group and send to WebSocket with filtering"""
+        """Receive log message from group and send to WebSocket with filtering.
+
+        Phase D-R4: the legacy 'admin'-tier branch (org_owner_id-filtered
+        logs) is now unreachable — connect() already fails closed to
+        is_superadmin only (see its own comment), and CentralAuthUser has
+        no 'admin'-tier claim to check anyway. Kept simple rather than
+        left in place referencing an attribute that no longer exists on
+        this consumer's user object."""
         log = event['log']
-        
+
         # SuperAdmins see everything
-        if self.user.role == 'superadmin':
+        if getattr(self.user, 'is_superadmin', False):
             await self.send(text_data=json.dumps({
                 'type': 'system_log',
                 'data': log
             }))
             return
-
-        # Admins (admin) see only logs from organizations they created
-        if self.user.role == 'admin':
-            # Check if this log belongs to an organization created by this admin
-            if log.get('org_owner_id') == self.user.id:
-                await self.send(text_data=json.dumps({
-                    'type': 'system_log',
-                    'data': log
-                }))
-                return
-            if log.get('user') == (self.user.email or self.user.username):
-                await self.send(text_data=json.dumps({
-                    'type': 'system_log',
-                    'data': log
-                }))
-                return
 

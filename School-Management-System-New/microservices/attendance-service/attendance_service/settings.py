@@ -80,10 +80,9 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    # Phase C10: DualAuthentication routes RS256 (central-auth) tokens to
-    # CentralAuthAuthentication (local JWKS verify) and HS256 (legacy)
-    # tokens to the original ServiceJWTAuthentication — same dual-run shape
-    # as C1-C9.
+    # Phase D-R4: DualAuthentication now delegates straight to
+    # CentralAuthAuthentication (RS256/JWKS) — the legacy HS256 branch is
+    # gone. See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     "DEFAULT_AUTHENTICATION_CLASSES": ["attendance_service.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [

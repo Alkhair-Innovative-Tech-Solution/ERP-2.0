@@ -62,10 +62,10 @@ RESULT_DB   = {"host": os.getenv("RESULT_DB_HOST",   "postgres-result"),   "dbna
 TIMETABLE_DB = {"host": os.getenv("TIMETABLE_DB_HOST", "postgres-timetable"), "dbname": os.getenv("TIMETABLE_DB_NAME", "timetable_db"), "user": os.getenv("TIMETABLE_DB_USER", "timetable_user"), "password": os.getenv("TIMETABLE_DB_PASSWORD", "timetable_pass"), "port": os.getenv("TIMETABLE_DB_PORT", "5432")}
 
 REST_FRAMEWORK = {
-    # Phase C13: DualAuthentication routes legacy HS256 tokens to the
-    # original JWTStatelessUserAuthentication (unchanged, still creates a
-    # TokenUser from JWT claims — no DB lookup) and central-auth RS256
-    # tokens to AiCentralAuthUser (see ai_service/dual_auth.py).
+    # Phase D-R4: DualAuthentication now delegates straight to
+    # CentralAuthAuthentication (RS256), wrapped as AiCentralAuthUser — the
+    # legacy HS256/JWTStatelessUserAuthentication branch is gone. See
+    # ai_service/dual_auth.py and docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     "DEFAULT_AUTHENTICATION_CLASSES": ["ai_service.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

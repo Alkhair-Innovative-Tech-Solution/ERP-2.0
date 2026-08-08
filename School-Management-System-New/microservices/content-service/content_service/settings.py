@@ -67,9 +67,9 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    # Phase C1: dual-run — DualAuthentication routes each request to either
-    # the legacy SMS-shared (HS256) or central-auth (RS256/JWKS) verifier
-    # based on the token's own alg header. See content/dual_auth.py.
+    # Phase D-R4: DualAuthentication now delegates straight to
+    # CentralAuthAuthentication (RS256/JWKS) — the legacy HS256 branch is
+    # gone. See content/dual_auth.py and docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     "DEFAULT_AUTHENTICATION_CLASSES": ["content.dual_auth.DualAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [

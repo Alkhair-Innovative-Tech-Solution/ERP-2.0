@@ -4,9 +4,7 @@ Automatically filters querysets based on the logged-in user's organization.
 Superadmin users bypass this filter.
 Supports ASGI/Asyncio by using contextvars instead of threading.local.
 """
-import jwt
 from contextvars import ContextVar
-from ams_shared.jwt.validator import ServiceJWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
 # Context variables to hold the current organization and user.
@@ -50,31 +48,14 @@ class OrganizationMiddleware:
                     # authentication (DRF's authentication_classes chain
                     # hasn't run yet at this point in the middleware
                     # stack — request.user is still Django's own
-                    # AnonymousUser). It previously only knew about
-                    # ServiceJWTAuthentication (HS256) — a central-auth
-                    # (RS256) token would fail HS256 decoding, get
-                    # swallowed by the broad except below, and leave the
-                    # thread-local context vars unset for the entire
-                    # request, making every OrganizationManager-backed
-                    # `.objects` query blind for central-auth (the same
-                    # C5-class hazard as everywhere else, manifesting via
-                    # middleware instead of a queryset). Route on the
-                    # token's own `alg` header, same as
-                    # org_service.dual_auth.DualAuthentication.
-                    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-                    is_central = False
-                    if auth_header.startswith('Bearer '):
-                        try:
-                            is_central = jwt.get_unverified_header(
-                                auth_header.split(' ', 1)[1]
-                            ).get('alg') == 'RS256'
-                        except jwt.InvalidTokenError:
-                            is_central = False
-                    if is_central:
-                        from org_service.dual_auth import DualAuthentication
-                        result = DualAuthentication().authenticate(request)
-                    else:
-                        result = ServiceJWTAuthentication().authenticate(request)
+                    # AnonymousUser). Phase D-R4: the legacy HS256 branch
+                    # (ServiceJWTAuthentication) this used to fall back to
+                    # is gone — central auth (RS256) is the only live
+                    # path, same as org_service.dual_auth.DualAuthentication,
+                    # which this now delegates to directly. See
+                    # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
+                    from org_service.dual_auth import DualAuthentication
+                    result = DualAuthentication().authenticate(request)
                     if result:
                         user = result[0]
                         if getattr(user, 'tenant_id', None) and getattr(user, 'organization', None) is None:

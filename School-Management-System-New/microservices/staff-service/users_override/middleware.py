@@ -26,9 +26,7 @@ actually does the tenant isolation, same as C11's `central_tenant_qs`
 pattern applied via `all_objects` there instead of relying on this
 manager).
 """
-import jwt
 from contextvars import ContextVar
-from ams_shared.jwt.validator import ServiceJWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
 # Context variables to hold the current organization and user.
@@ -66,23 +64,15 @@ class OrganizationMiddleware:
         try:
             user = getattr(request, 'user', None)
 
-            # Stateless JWT auth — works across all microservices without a DB lookup.
+            # Phase D-R4: legacy HS256 (ServiceJWTAuthentication) fallback
+            # removed — central auth (RS256) is the only live path, same
+            # as staff_service.dual_auth.DualAuthentication, which this
+            # now delegates to directly. See
+            # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
             if not user or not user.is_authenticated:
                 try:
-                    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-                    is_central = False
-                    if auth_header.startswith('Bearer '):
-                        try:
-                            is_central = jwt.get_unverified_header(
-                                auth_header.split(' ', 1)[1]
-                            ).get('alg') == 'RS256'
-                        except jwt.InvalidTokenError:
-                            is_central = False
-                    if is_central:
-                        from staff_service.dual_auth import DualAuthentication
-                        result = DualAuthentication().authenticate(request)
-                    else:
-                        result = ServiceJWTAuthentication().authenticate(request)
+                    from staff_service.dual_auth import DualAuthentication
+                    result = DualAuthentication().authenticate(request)
                     if result:
                         user = result[0]
                 except (AuthenticationFailed, Exception):

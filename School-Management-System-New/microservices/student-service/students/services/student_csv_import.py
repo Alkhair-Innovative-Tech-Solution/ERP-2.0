@@ -575,14 +575,44 @@ def _ensure_student_user_account(student):
             'code_prefix': getattr(org, 'code_prefix', None),
         } if org else None,
     }
-    try:
-        resp = req_lib.post(
-            f"{auth_url}/api/internal/create-user/",
-            json=payload,
-            headers={'X-Internal-Secret': secret},
-            timeout=5,
-        )
-        if resp.status_code not in (200, 201, 409):
-            print(f"[BULK STUDENT USER] Auth-service error for {student.student_id}: {resp.status_code} {resp.text}")
-    except Exception as e:
-        print(f"[BULK STUDENT USER] Could not reach auth-service for {student.student_id}: {e}")
+    # Phase D-R2: flag-gated off by default in this environment (see
+    # user_creation_service.py's identical WRITE_TO_AUTH_8001 gate). The
+    # central dual-write added in Phase D-R0 (below) already covers this.
+    if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
+        print(f"[BULK STUDENT USER] Skipped auth-service for {student.student_id} (WRITE_TO_AUTH_8001=false)")
+    else:
+        try:
+            resp = req_lib.post(
+                f"{auth_url}/api/internal/create-user/",
+                json=payload,
+                headers={'X-Internal-Secret': secret},
+                timeout=5,
+            )
+            if resp.status_code not in (200, 201, 409):
+                print(f"[BULK STUDENT USER] Auth-service error for {student.student_id}: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[BULK STUDENT USER] Could not reach auth-service for {student.student_id}: {e}")
+
+    # Phase D-R0 dual-write: also land this student in central auth's SMS01
+    # tenant, flag-gated on SYNC_TO_CENTRAL_AUTH (same flag as every other
+    # sync in this codebase). Flagged as a gap in D-b2 ("no local password
+    # hash, why it was deferred") — on closer look that reasoning didn't
+    # hold: this function already uses a fixed default password ('12345',
+    # matching perform_create's own _ensure_student_user_account and
+    # central_auth_sync_service.DEFAULT_PASSWORD), so a hash CAN be
+    # produced the same way D-b2's central-auth-branch case did — no reason
+    # left to defer. student.id (this service's own local PK) is used as
+    # legacy_user_id, same idempotency-key repurposing as every other
+    # central-auth-branch sync in this codebase (there's no literal
+    # auth-8001 users_user.id involved in this CSV path either).
+    from django.contrib.auth.hashers import make_password
+    from services.central_auth_sync_service import sync_student_to_central_auth, DEFAULT_PASSWORD
+    sync_student_to_central_auth(
+        legacy_user_id=student.id,
+        email=actual_email,
+        username=student.student_id,
+        password_hash=make_password(DEFAULT_PASSWORD),
+        full_name=student.full_name or student.name,
+        role='student',
+        is_active=True,
+    )

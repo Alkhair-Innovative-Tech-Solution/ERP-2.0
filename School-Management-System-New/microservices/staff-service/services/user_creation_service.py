@@ -149,8 +149,21 @@ class UserCreationService:
     
     @staticmethod
     def _sync_user_to_auth(user, entity):
-        """Call auth-service internal API to create the user there too."""
-        import os, json
+        """Call auth-service internal API to create the user there too.
+
+        Phase D-R2: flag-gated off by default in this environment
+        (WRITE_TO_AUTH_8001, defaults 'true' in code so nothing changes
+        anywhere this env var isn't explicitly set — this environment's own
+        .env sets it to 'false' for the cutover). Central auth already
+        carries this write (sync_staff_entity_to_central_auth, called
+        right after this function returns — see create_user_from_entity).
+        Kept as a flag, not a deletion, so this is a one-line revert if
+        auth-8001 needs to be fed again."""
+        import os
+        if os.getenv('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
+            print(f"[AUTH-SYNC] Skipped for {user.email} (WRITE_TO_AUTH_8001=false)")
+            return
+        import json
         import urllib.request, urllib.error
         auth_url = os.getenv('AUTH_SERVICE_URL', 'http://auth-service:8001')
         secret = os.getenv('INTERNAL_SERVICE_SECRET', '')

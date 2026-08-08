@@ -15,6 +15,12 @@ DEFAULT_PASSWORD = "12345"
 
 
 def _sync_to_auth(email, username, first_name, last_name, role, org_data):
+    # Phase D-R2: flag-gated off by default in this environment (see
+    # user_creation_service.py's identical WRITE_TO_AUTH_8001 gate for the
+    # full rationale) — this backfill command already calls
+    # sync_staff_to_central_auth() below regardless.
+    if os.getenv('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
+        return True, "skipped (WRITE_TO_AUTH_8001=false)"
     payload = json.dumps({
         "email": email,
         "password": DEFAULT_PASSWORD,

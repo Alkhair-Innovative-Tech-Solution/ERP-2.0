@@ -361,6 +361,10 @@ services:
       # status to central auth's SMS01 tenant. Same flag as staff/student
       # sync (one switch controls all three), off by default.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
+      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
+      # existing behavior) so this is a no-op everywhere except where
+      # explicitly set 'false' for the cutover.
+      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
     extra_hosts:
@@ -451,6 +455,10 @@ services:
       # Off by default — set SYNC_TO_CENTRAL_AUTH=true in the environment
       # to enable per-deployment.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
+      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
+      # existing behavior) so this is a no-op everywhere except where
+      # explicitly set 'false' for the cutover.
+      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       # Phase C12: remap_central_user_ids management command only — see
@@ -518,6 +526,10 @@ services:
       # mirroring staff-service's identical block. Same flag (one switch
       # controls both), off by default.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
+      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
+      # existing behavior) so this is a no-op everywhere except where
+      # explicitly set 'false' for the cutover.
+      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       ATTENDANCE_SERVICE_URL: http://attendance-service:8006
@@ -909,7 +921,13 @@ services:
       - "${NGINX_HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      # Phase D-R1: fixed a pre-existing, unrelated path bug found while
+      # verifying central-auth tokens across services — this pointed at
+      # ./nginx/proxy_params (never existed as a file; Docker silently
+      # bind-mounted it as an empty directory, so nginx failed to start
+      # with "pread() ... failed (21: Is a directory)"). The real,
+      # git-tracked file lives at microservices/gateway/proxy_params.conf.
+      - ./microservices/gateway/proxy_params.conf:/etc/nginx/proxy_params:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       auth-service:

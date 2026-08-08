@@ -1,8 +1,9 @@
 """
 Phase D-b5: dual-write org-admin provisioning and org name/active-status to
-central auth's SMS01 tenant, in addition to org-service's existing auth-8001
-calls (untouched — auth-8001 is still what org-admins actually log into
-until the retirement phase repoints them).
+central auth's SMS01 tenant. Phase D-R6: this is now the ONLY write path —
+auth-8001 (what org-admins used to log into, and the parallel write this
+module's docstring originally described as "untouched") has been retired.
+See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
 Mirrors staff-service's services/central_auth_sync_service.py (Phase B4)
 and student-service's (Phase D-b2): same SYNC_TO_CENTRAL_AUTH env flag (one

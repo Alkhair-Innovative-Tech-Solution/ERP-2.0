@@ -829,12 +829,20 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost}
         NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-}
         INTERNAL_API_URL: http://gateway
-        # Phase D-b4: dual-run login source switch — off (legacy) by
-        # default. Set NEXT_PUBLIC_AUTH_SOURCE=central + a real
-        # NEXT_PUBLIC_CENTRAL_AUTH_URL to switch, then rebuild this image
-        # (NEXT_PUBLIC_* is baked in at build time, not read at runtime).
-        NEXT_PUBLIC_AUTH_SOURCE: ${NEXT_PUBLIC_AUTH_SOURCE:-legacy}
-        NEXT_PUBLIC_CENTRAL_AUTH_URL: ${NEXT_PUBLIC_CENTRAL_AUTH_URL:-}
+        # Phase D-b4: dual-run login source switch. Phase D-R6: default
+        # flipped to 'central' — 'legacy' posted to auth-8001, which no
+        # longer exists (D-R5), so that default would silently break login
+        # on any fresh deployment that doesn't override it. NEXT_PUBLIC_*
+        # is baked in at build time, not read at runtime — changing this
+        # requires rebuilding this image.
+        NEXT_PUBLIC_AUTH_SOURCE: ${NEXT_PUBLIC_AUTH_SOURCE:-central}
+        # Read by the BROWSER (not a container), so it needs the
+        # host-published port, not host.docker.internal. Defaulting this
+        # alongside the 'central' default above so a fresh deployment
+        # doesn't end up with AUTH_SOURCE=central but an empty base URL
+        # (which frontend/src/lib/api.ts would silently treat as
+        # same-origin relative requests).
+        NEXT_PUBLIC_CENTRAL_AUTH_URL: ${NEXT_PUBLIC_CENTRAL_AUTH_URL:-http://localhost:8000}
     container_name: ams_frontend
     restart: always
     ports:

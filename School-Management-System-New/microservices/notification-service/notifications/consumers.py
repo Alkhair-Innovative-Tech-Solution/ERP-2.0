@@ -183,8 +183,9 @@ class MonitoringConsumer(AsyncWebsocketConsumer):
             self.monitoring_task.cancel()
 
     # Microservices to probe — (key, docker_hostname, port)
+    # Phase D-R6: 'auth' (auth-service:8001) removed — no longer exists
+    # (D-R5). See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     MICROSERVICE_PROBES = [
-        ('auth',         'auth-service',         8001),
         ('org',          'org-service',          8002),
         ('campus',       'campus-service',       8003),
         ('staff',        'staff-service',        8004),

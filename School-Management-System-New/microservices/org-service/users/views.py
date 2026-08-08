@@ -1657,17 +1657,22 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
         org = self.perform_create(serializer)
 
         # Sync payment_status=pending to auth-service (invoice auto-created in signal)
-        try:
-            auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-            internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-            http_requests.post(
-                f'{auth_url}/api/internal/sync-org/',
-                json={'id': org.id, 'payment_status': 'pending'},
-                headers={'X-Internal-Secret': internal_secret},
-                timeout=5,
-            )
-        except Exception as e:
-            print(f'[WARN] org payment_status sync to auth-service failed: {e}')
+        # Phase D-R2: flag-gated off by default in this environment — see
+        # OrganizationCreateSerializer.create()'s identical WRITE_TO_AUTH_8001
+        # gate. No central equivalent (payment_status isn't tracked
+        # centrally, per D-b5) — this write simply stops when disabled.
+        if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
+            try:
+                auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
+                internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
+                http_requests.post(
+                    f'{auth_url}/api/internal/sync-org/',
+                    json={'id': org.id, 'payment_status': 'pending'},
+                    headers={'X-Internal-Secret': internal_secret},
+                    timeout=5,
+                )
+            except Exception as e:
+                print(f'[WARN] org payment_status sync to auth-service failed: {e}')
 
         # Return full org data after creation
         return Response(
@@ -1719,7 +1724,8 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
             sync_payload['is_active'] = org.is_active
         if 'name' in self.request.data:
             sync_payload['name'] = org.name
-        if len(sync_payload) > 1:
+        # Phase D-R2: flag-gated off by default in this environment.
+        if len(sync_payload) > 1 and os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
             try:
                 auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
                 internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
@@ -2530,18 +2536,21 @@ def invoice_approve(request, pk):
     org.save(update_fields=update_fields)
 
     # Sync payment_status + is_active to auth-service
-    try:
-        import os, requests as http_requests
-        auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-        internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-        http_requests.post(
-            f'{auth_url}/api/internal/sync-org/',
-            json={'id': org.id, 'is_active': True, 'payment_status': 'paid'},
-            headers={'X-Internal-Secret': internal_secret},
-            timeout=5,
-        )
-    except Exception as e:
-        print(f'[WARN] org sync to auth-service failed: {e}')
+    # Phase D-R2: flag-gated off by default in this environment.
+    import os
+    if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
+        try:
+            import requests as http_requests
+            auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
+            internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
+            http_requests.post(
+                f'{auth_url}/api/internal/sync-org/',
+                json={'id': org.id, 'is_active': True, 'payment_status': 'paid'},
+                headers={'X-Internal-Secret': internal_secret},
+                timeout=5,
+            )
+        except Exception as e:
+            print(f'[WARN] org sync to auth-service failed: {e}')
 
     # Phase D-b5 dual-write: same is_active activation, also to central auth.
     from services.central_auth_sync_service import sync_org_to_central_auth

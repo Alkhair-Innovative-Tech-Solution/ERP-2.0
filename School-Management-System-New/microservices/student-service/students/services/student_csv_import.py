@@ -575,17 +575,23 @@ def _ensure_student_user_account(student):
             'code_prefix': getattr(org, 'code_prefix', None),
         } if org else None,
     }
-    try:
-        resp = req_lib.post(
-            f"{auth_url}/api/internal/create-user/",
-            json=payload,
-            headers={'X-Internal-Secret': secret},
-            timeout=5,
-        )
-        if resp.status_code not in (200, 201, 409):
-            print(f"[BULK STUDENT USER] Auth-service error for {student.student_id}: {resp.status_code} {resp.text}")
-    except Exception as e:
-        print(f"[BULK STUDENT USER] Could not reach auth-service for {student.student_id}: {e}")
+    # Phase D-R2: flag-gated off by default in this environment (see
+    # user_creation_service.py's identical WRITE_TO_AUTH_8001 gate). The
+    # central dual-write added in Phase D-R0 (below) already covers this.
+    if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
+        print(f"[BULK STUDENT USER] Skipped auth-service for {student.student_id} (WRITE_TO_AUTH_8001=false)")
+    else:
+        try:
+            resp = req_lib.post(
+                f"{auth_url}/api/internal/create-user/",
+                json=payload,
+                headers={'X-Internal-Secret': secret},
+                timeout=5,
+            )
+            if resp.status_code not in (200, 201, 409):
+                print(f"[BULK STUDENT USER] Auth-service error for {student.student_id}: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[BULK STUDENT USER] Could not reach auth-service for {student.student_id}: {e}")
 
     # Phase D-R0 dual-write: also land this student in central auth's SMS01
     # tenant, flag-gated on SYNC_TO_CENTRAL_AUTH (same flag as every other

@@ -147,20 +147,16 @@ INTERNAL_SERVICE_SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-# NOTE: this Django *setting* (AUTH_SERVICE_URL) was, before Phase C12,
-# an orphaned mirror of the raw AUTH_SERVICE_URL env var — confirmed
-# nothing in this codebase ever read `settings.AUTH_SERVICE_URL`;
-# sync_staff_to_auth.py and user_creation_service.py both read the raw
-# env var directly via os.getenv(). Phase C12's central_auth/jwks.py is
-# the first thing that actually consults this Django setting (hardcoded
-# `getattr(settings, 'AUTH_SERVICE_URL', ...)`, part of the unchanged
-# template) — and it needs to mean the CENTRAL auth-service (:8000), not
-# the legacy org/user-sync one (:8001) that the raw env var of the same
-# name points at everywhere else in this service. Repointed to reuse
+# NOTE: this Django *setting* (AUTH_SERVICE_URL) feeds central_auth/jwks.py
+# (hardcoded `getattr(settings, 'AUTH_SERVICE_URL', ...)`, part of the
+# unchanged template) and means the CENTRAL auth-service (:8000) — reused
 # Phase B4's existing CENTRAL_AUTH_URL env var (services/
 # central_auth_sync_service.py already points it at the same central
-# auth-service) instead of the raw AUTH_SERVICE_URL env var, which — and
-# every other file that reads it directly — stays untouched.
+# auth-service). Before Phase D-R6, the raw `AUTH_SERVICE_URL` env var
+# (a different, legacy name) was also read directly in
+# sync_staff_to_auth.py/user_creation_service.py, pointing at auth-8001 —
+# those call sites are now removed (auth-8001 no longer exists), so that
+# naming collision this comment used to warn about is moot.
 AUTH_SERVICE_URL = os.getenv("CENTRAL_AUTH_URL", "http://host.docker.internal:8000")
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

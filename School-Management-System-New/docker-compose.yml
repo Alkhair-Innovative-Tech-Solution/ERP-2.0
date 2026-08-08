@@ -309,19 +309,12 @@ services:
       DB_USER: org_user
       DB_PASSWORD: ${ORG_DB_PASS:-org_pass}
       REDIS_URL: redis://redis:6379/2
-      AUTH_SERVICE_URL: http://auth-service:8001
-      # Phase C11: central-auth JWKS verification — distinct from
-      # AUTH_SERVICE_URL above (that one is the legacy org/user-sync
-      # service on :8001, unrelated to central auth).
+      # Phase C11: central-auth JWKS verification.
       CENTRAL_AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       # Phase D-b5: dual-write org-admin provisioning + org name/active
       # status to central auth's SMS01 tenant. Same flag as staff/student
       # sync (one switch controls all three), off by default.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
-      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
-      # existing behavior) so this is a no-op everywhere except where
-      # explicitly set 'false' for the cutover.
-      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
     extra_hosts:
@@ -349,7 +342,6 @@ services:
       DB_USER: org_user
       DB_PASSWORD: ${ORG_DB_PASS:-org_pass}
       REDIS_URL: redis://redis:6379/2
-      AUTH_SERVICE_URL: http://auth-service:8001
     depends_on:
       postgres-org:
         condition: service_healthy
@@ -412,10 +404,6 @@ services:
       # Off by default — set SYNC_TO_CENTRAL_AUTH=true in the environment
       # to enable per-deployment.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
-      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
-      # existing behavior) so this is a no-op everywhere except where
-      # explicitly set 'false' for the cutover.
-      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       # Phase C12: remap_central_user_ids management command only — see
@@ -483,10 +471,6 @@ services:
       # mirroring staff-service's identical block. Same flag (one switch
       # controls both), off by default.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
-      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
-      # existing behavior) so this is a no-op everywhere except where
-      # explicitly set 'false' for the cutover.
-      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       ATTENDANCE_SERVICE_URL: http://attendance-service:8006

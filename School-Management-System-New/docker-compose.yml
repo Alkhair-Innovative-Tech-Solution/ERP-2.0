@@ -74,22 +74,10 @@ services:
       - "8084:80"
 
   # ─── Per-Service Databases ────────────────────────────────────────────────────
-
-  postgres-auth:
-    image: postgres:15-alpine
-    container_name: ams_db_auth
-    restart: always
-    environment:
-      POSTGRES_DB: auth_db
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: ${AUTH_DB_PASS:-auth_pass}
-    volumes:
-      - postgres_auth:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # Phase D-R5: postgres-auth (legacy auth-8001's own DB) removed — dumped to
+  # docs/archive/auth_db_final_dump_2026-08-08.sql (confirmed empty of real
+  # user data before drop) and its volume deleted. See
+  # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
   postgres-org:
     image: postgres:15-alpine
@@ -300,41 +288,10 @@ services:
       retries: 5
 
   # ─── Microservices ─────────────────────────────────────────────────────────────
-
-  auth-service:
-    build:
-      context: .
-      dockerfile: microservices/auth-service/Dockerfile
-    container_name: ams_auth
-    restart: always
-    ports:
-      - "8001:8001"
-    environment:
-      <<: *common-env
-      SECRET_KEY: ${AUTH_SECRET_KEY:-auth-secret-change-me}
-      DB_HOST: postgres-auth
-      DB_PORT: 5432
-      DB_NAME: auth_db
-      DB_USER: auth_user
-      DB_PASSWORD: ${AUTH_DB_PASS:-auth_pass}
-      REDIS_URL: redis://redis:6379/1
-      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
-      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
-      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-    depends_on:
-      postgres-auth:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+  # Phase D-R5: auth-service (legacy auth-8001) removed — zero live traffic
+  # confirmed (only its own Docker healthcheck since D-R1/R3's cutover),
+  # its DB dumped and dropped (see postgres-auth's own removal note above).
+  # See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
   org-service:
     build:
@@ -352,19 +309,12 @@ services:
       DB_USER: org_user
       DB_PASSWORD: ${ORG_DB_PASS:-org_pass}
       REDIS_URL: redis://redis:6379/2
-      AUTH_SERVICE_URL: http://auth-service:8001
-      # Phase C11: central-auth JWKS verification — distinct from
-      # AUTH_SERVICE_URL above (that one is the legacy org/user-sync
-      # service on :8001, unrelated to central auth).
+      # Phase C11: central-auth JWKS verification.
       CENTRAL_AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       # Phase D-b5: dual-write org-admin provisioning + org name/active
       # status to central auth's SMS01 tenant. Same flag as staff/student
       # sync (one switch controls all three), off by default.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
-      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
-      # existing behavior) so this is a no-op everywhere except where
-      # explicitly set 'false' for the cutover.
-      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
     extra_hosts:
@@ -392,7 +342,6 @@ services:
       DB_USER: org_user
       DB_PASSWORD: ${ORG_DB_PASS:-org_pass}
       REDIS_URL: redis://redis:6379/2
-      AUTH_SERVICE_URL: http://auth-service:8001
     depends_on:
       postgres-org:
         condition: service_healthy
@@ -455,10 +404,6 @@ services:
       # Off by default — set SYNC_TO_CENTRAL_AUTH=true in the environment
       # to enable per-deployment.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
-      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
-      # existing behavior) so this is a no-op everywhere except where
-      # explicitly set 'false' for the cutover.
-      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       # Phase C12: remap_central_user_ids management command only — see
@@ -526,10 +471,6 @@ services:
       # mirroring staff-service's identical block. Same flag (one switch
       # controls both), off by default.
       SYNC_TO_CENTRAL_AUTH: ${SYNC_TO_CENTRAL_AUTH:-false}
-      # Phase D-R2: stop writing to auth-8001 — defaults 'true' (preserve
-      # existing behavior) so this is a no-op everywhere except where
-      # explicitly set 'false' for the cutover.
-      WRITE_TO_AUTH_8001: ${WRITE_TO_AUTH_8001:-true}
       CENTRAL_AUTH_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
       SMS_INTERNAL_SECRET: ${SMS_INTERNAL_SECRET:-}
       ATTENDANCE_SERVICE_URL: http://attendance-service:8006
@@ -584,10 +525,6 @@ services:
       STAFF_DB_NAME: staff_db
       STAFF_DB_USER: staff_user
       STAFF_DB_PASSWORD: ${STAFF_DB_PASS:-staff_pass}
-      AUTH_DB_HOST: postgres-auth
-      AUTH_DB_NAME: auth_db
-      AUTH_DB_USER: auth_user
-      AUTH_DB_PASSWORD: ${AUTH_DB_PASS:-auth_pass}
       # Phase C10: central auth JWKS verification.
       AUTH_SERVICE_URL: ${CENTRAL_AUTH_URL:-http://host.docker.internal:8000}
     depends_on:
@@ -596,8 +533,6 @@ services:
       postgres-student:
         condition: service_healthy
       postgres-staff:
-        condition: service_healthy
-      postgres-auth:
         condition: service_healthy
       staff-service:
         condition: service_started
@@ -894,12 +829,20 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost}
         NEXT_PUBLIC_WS_BASE_URL: ${NEXT_PUBLIC_WS_BASE_URL:-}
         INTERNAL_API_URL: http://gateway
-        # Phase D-b4: dual-run login source switch — off (legacy) by
-        # default. Set NEXT_PUBLIC_AUTH_SOURCE=central + a real
-        # NEXT_PUBLIC_CENTRAL_AUTH_URL to switch, then rebuild this image
-        # (NEXT_PUBLIC_* is baked in at build time, not read at runtime).
-        NEXT_PUBLIC_AUTH_SOURCE: ${NEXT_PUBLIC_AUTH_SOURCE:-legacy}
-        NEXT_PUBLIC_CENTRAL_AUTH_URL: ${NEXT_PUBLIC_CENTRAL_AUTH_URL:-}
+        # Phase D-b4: dual-run login source switch. Phase D-R6: default
+        # flipped to 'central' — 'legacy' posted to auth-8001, which no
+        # longer exists (D-R5), so that default would silently break login
+        # on any fresh deployment that doesn't override it. NEXT_PUBLIC_*
+        # is baked in at build time, not read at runtime — changing this
+        # requires rebuilding this image.
+        NEXT_PUBLIC_AUTH_SOURCE: ${NEXT_PUBLIC_AUTH_SOURCE:-central}
+        # Read by the BROWSER (not a container), so it needs the
+        # host-published port, not host.docker.internal. Defaulting this
+        # alongside the 'central' default above so a fresh deployment
+        # doesn't end up with AUTH_SOURCE=central but an empty base URL
+        # (which frontend/src/lib/api.ts would silently treat as
+        # same-origin relative requests).
+        NEXT_PUBLIC_CENTRAL_AUTH_URL: ${NEXT_PUBLIC_CENTRAL_AUTH_URL:-http://localhost:8000}
     container_name: ams_frontend
     restart: always
     ports:
@@ -907,9 +850,6 @@ services:
     environment:
       NODE_ENV: production
       INTERNAL_API_URL: http://gateway
-    depends_on:
-      auth-service:
-        condition: service_healthy
 
   # ─── API Gateway ──────────────────────────────────────────────────────────────
 
@@ -930,8 +870,6 @@ services:
       - ./microservices/gateway/proxy_params.conf:/etc/nginx/proxy_params:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
-      auth-service:
-        condition: service_started
       frontend:
         condition: service_started
 
@@ -939,7 +877,6 @@ volumes:
   redis_data:
   rabbitmq_data:
   minio_data:
-  postgres_auth:
   postgres_org:
   postgres_campus:
   postgres_staff:

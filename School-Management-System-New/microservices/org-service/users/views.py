@@ -1651,28 +1651,16 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
         return serializer.save(created_by_id=user.id)
 
     def create(self, request, *args, **kwargs):
-        import os, requests as http_requests
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         org = self.perform_create(serializer)
 
-        # Sync payment_status=pending to auth-service (invoice auto-created in signal)
-        # Phase D-R2: flag-gated off by default in this environment — see
-        # OrganizationCreateSerializer.create()'s identical WRITE_TO_AUTH_8001
-        # gate. No central equivalent (payment_status isn't tracked
-        # centrally, per D-b5) — this write simply stops when disabled.
-        if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
-            try:
-                auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-                internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-                http_requests.post(
-                    f'{auth_url}/api/internal/sync-org/',
-                    json={'id': org.id, 'payment_status': 'pending'},
-                    headers={'X-Internal-Secret': internal_secret},
-                    timeout=5,
-                )
-            except Exception as e:
-                print(f'[WARN] org payment_status sync to auth-service failed: {e}')
+        # Phase D-R6: the auth-8001 payment_status sync (POST
+        # /api/internal/sync-org/, flag-gated by WRITE_TO_AUTH_8001) is
+        # removed — auth-8001 no longer exists (D-R5). No central
+        # equivalent (payment_status isn't tracked centrally, per D-b5) —
+        # already flagged as a gap there, unchanged by this removal. See
+        # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
         # Return full org data after creation
         return Response(
@@ -1706,7 +1694,6 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
         (max_users, max_students, max_campuses) to the organization record.
         SuperAdmin can still manually override after assignment.
         """
-        import os, requests as http_requests
         new_plan = serializer.validated_data.get('plan')
         if new_plan:
             request_data = self.request.data
@@ -1718,25 +1705,14 @@ class OrganizationDetailView(generics.RetrieveUpdateDestroyAPIView):
                 serializer.validated_data['max_campuses'] = new_plan.max_campuses
         org = serializer.save()
 
-        # Sync is_active and name changes to auth-service so login check stays accurate
+        # Sync payload for central auth below (auth-8001's own sync-org
+        # write, flag-gated by WRITE_TO_AUTH_8001, removed in D-R6 —
+        # auth-8001 no longer exists, see docs/PHASE_D_R4R6_REMOVAL_RESULT.md).
         sync_payload = {'id': org.id}
         if 'is_active' in self.request.data:
             sync_payload['is_active'] = org.is_active
         if 'name' in self.request.data:
             sync_payload['name'] = org.name
-        # Phase D-R2: flag-gated off by default in this environment.
-        if len(sync_payload) > 1 and os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
-            try:
-                auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-                internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-                http_requests.post(
-                    f'{auth_url}/api/internal/sync-org/',
-                    json=sync_payload,
-                    headers={'X-Internal-Secret': internal_secret},
-                    timeout=5,
-                )
-            except Exception as e:
-                print(f'[WARN] org sync to auth-service failed: {e}')
 
         # Phase D-b5 dual-write: same is_active/name change, also to central
         # auth (flag-gated, no-ops unless SYNC_TO_CENTRAL_AUTH=true).
@@ -2535,22 +2511,10 @@ def invoice_approve(request, pk):
     update_fields.append('is_active')
     org.save(update_fields=update_fields)
 
-    # Sync payment_status + is_active to auth-service
-    # Phase D-R2: flag-gated off by default in this environment.
-    import os
-    if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
-        try:
-            import requests as http_requests
-            auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-            internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-            http_requests.post(
-                f'{auth_url}/api/internal/sync-org/',
-                json={'id': org.id, 'is_active': True, 'payment_status': 'paid'},
-                headers={'X-Internal-Secret': internal_secret},
-                timeout=5,
-            )
-        except Exception as e:
-            print(f'[WARN] org sync to auth-service failed: {e}')
+    # Phase D-R6: the auth-8001 payment_status+is_active sync (POST
+    # /api/internal/sync-org/, flag-gated by WRITE_TO_AUTH_8001) is removed
+    # — auth-8001 no longer exists (D-R5). See
+    # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
     # Phase D-b5 dual-write: same is_active activation, also to central auth.
     from services.central_auth_sync_service import sync_org_to_central_auth

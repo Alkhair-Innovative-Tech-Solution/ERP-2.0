@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import {
-    Zap, ShieldCheck, CheckCircle2, Users, FileText, Calendar, Banknote,
+    Zap, CheckCircle2, Users, FileText, Calendar, Banknote,
     Bell, HelpCircle, Building2, GraduationCap, Monitor, Database,
     Server, type LucideIcon,
 } from "lucide-react"
@@ -18,7 +18,8 @@ import type { ServiceStat } from "@/hooks/useSystemMonitoring"
 interface Svc { id: string; name: string; port?: number; icon: LucideIcon; color: string }
 
 const MICROSERVICES: Svc[] = [
-    { id: 'auth',         name: 'Auth',        port: 8001, icon: ShieldCheck,   color: '#6366f1' },
+    // Phase D-R6: 'auth' (auth-service:8001) removed — no longer exists
+    // (D-R5). See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     { id: 'org',          name: 'Org',         port: 8002, icon: Building2,     color: '#8b5cf6' },
     { id: 'campus',       name: 'Campus',      port: 8003, icon: Server,        color: '#0ea5e9' },
     { id: 'staff',        name: 'Staff',       port: 8004, icon: Users,         color: '#10b981' },

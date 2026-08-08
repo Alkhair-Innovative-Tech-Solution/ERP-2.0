@@ -86,19 +86,9 @@ class Command(BaseCommand):
             # Set org payment_status=pending (1 day grace — overdue after due_date)
             Organization.all_objects.filter(pk=org.pk).update(payment_status='pending')
 
-            # Sync to auth-service
-            try:
-                import os, requests as http_requests
-                auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-                secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-                http_requests.post(
-                    f'{auth_url}/api/internal/sync-org/',
-                    json={'id': org.id, 'payment_status': 'pending'},
-                    headers={'X-Internal-Secret': secret},
-                    timeout=5,
-                )
-            except Exception as e:
-                self.stderr.write(f'[WARN] Auth sync failed for org {org.id}: {e}')
+            # Phase D-R6: the auth-8001 sync (POST /api/internal/sync-org/)
+            # is removed — auth-8001 no longer exists (D-R5). See
+            # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
             # Notify org admin
             try:

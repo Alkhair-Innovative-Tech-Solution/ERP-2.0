@@ -1,7 +1,8 @@
 """
-Phase B4: dual-write staff creation to central auth (SMS01 tenant), in
-addition to SMS's own auth-8001 (which stays untouched — auth-8001 is
-still what SMS actually logs in against; this is preparation for Phase C).
+Phase B4: dual-write staff creation to central auth (SMS01 tenant). Phase
+D-R6: this is now the ONLY write path — auth-8001 (what this module's
+docstring originally described as staying untouched) has been retired. See
+docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
 Controlled by SYNC_TO_CENTRAL_AUTH env flag — no-ops entirely when unset/
 false, so it's off by default and per-environment controllable without a

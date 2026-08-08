@@ -91,8 +91,6 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        import os
-        import requests as http_requests
         from django.db import transaction
         admin_email = validated_data.pop('admin_email')
         admin_password = validated_data.pop('admin_password')
@@ -151,45 +149,11 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
                 has_changed_default_password=True,
             )
 
-        # Sync to auth-service AFTER transaction commits (avoids TransactionManagementError)
-        # Phase D-R2: flag-gated off by default in this environment
-        # (WRITE_TO_AUTH_8001, defaults 'true' in code — this environment's
-        # .env sets it 'false' for the cutover). Central auth already
-        # carries this write (sync_org_admin_to_central_auth, below).
-        if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
-            print(f'[AUTH-SYNC] Skipped for {admin_email} (WRITE_TO_AUTH_8001=false)')
-        else:
-            auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-            internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-            try:
-                resp = http_requests.post(
-                    f'{auth_url}/api/internal/create-user/',
-                    json={
-                        'email': admin_email,
-                        'password': admin_password,
-                        'username': local_user.username,
-                        'first_name': first_name,
-                        'last_name': last_name,
-                        'role': 'org_admin',
-                        'is_org_admin': True,
-                        'has_changed_default_password': True,
-                        'organization': {
-                            'id': org.id,
-                            'name': org.name,
-                            'created_by_id': created_by_id,
-                            'code_prefix': org.code_prefix,
-                            'code_pattern': org.code_pattern,
-                        },
-                    },
-                    headers={'X-Internal-Secret': internal_secret},
-                    timeout=10,
-                )
-                if resp.status_code not in (201, 409):
-                    # Log the failure but don't roll back — org was created successfully.
-                    # Admin can retry sync or manually fix.
-                    print(f'[WARN] Auth-service sync failed for {admin_email}: {resp.status_code} {resp.text}')
-            except http_requests.RequestException as e:
-                print(f'[WARN] Could not reach auth-service to sync user {admin_email}: {e}')
+        # Phase D-R6: the auth-8001 write path (POST /api/internal/create-user/,
+        # flag-gated by WRITE_TO_AUTH_8001) is removed — auth-8001 no longer
+        # exists (D-R5). Central auth already carries this write
+        # (sync_org_admin_to_central_auth, below). See
+        # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
         # Phase D-b5 dual-write: also land this org-admin in central auth's
         # SMS01 tenant, and push the new org's name/active status. No-ops

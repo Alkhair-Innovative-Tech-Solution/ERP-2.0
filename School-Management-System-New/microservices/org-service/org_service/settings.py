@@ -82,16 +82,15 @@ REST_FRAMEWORK = {
     ],
 }
 
-# Phase C11: central_auth/jwks.py reads settings.AUTH_SERVICE_URL — this
-# service ALREADY has its own `AUTH_SERVICE_URL` env var (read directly via
-# os.environ.get(...) in views.py/serializers.py, pointing at the LEGACY
-# org/user-sync service on :8001 — a third, separate service, not central
-# auth). Reusing that same env var name here would silently repoint those
-# legacy sync calls at the wrong service. CENTRAL_AUTH_SERVICE_URL is a
-# deliberately distinct env var name feeding the Django *setting* named
-# AUTH_SERVICE_URL (which only central_auth/jwks.py reads, via
-# getattr(settings, 'AUTH_SERVICE_URL', ...)) — the raw env var used
-# elsewhere in this service is untouched.
+# Phase C11: central_auth/jwks.py reads settings.AUTH_SERVICE_URL.
+# CENTRAL_AUTH_SERVICE_URL is a deliberately distinct env var name feeding
+# this Django *setting* (which only central_auth/jwks.py reads, via
+# getattr(settings, 'AUTH_SERVICE_URL', ...)) — originally chosen to avoid
+# colliding with the raw `AUTH_SERVICE_URL` env var this service's own
+# views.py/serializers.py read directly, pointing at the legacy org/user-
+# sync service on :8001. Phase D-R6 removed every one of those call sites
+# (auth-8001 no longer exists) — the naming collision this avoided is now
+# moot, but the setting itself (central auth JWKS) is unaffected.
 AUTH_SERVICE_URL = os.getenv("CENTRAL_AUTH_SERVICE_URL", "http://host.docker.internal:8000")
 
 CACHES = {

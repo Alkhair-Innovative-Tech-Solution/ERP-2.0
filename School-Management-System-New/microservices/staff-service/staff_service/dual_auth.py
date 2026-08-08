@@ -49,12 +49,10 @@ StaffCentralAuthUser.role is None, which never equals 'donor', so it
 never incorrectly blocks a non-donor central token — and SAFE_METHODS are
 allowed unconditionally regardless.
 """
-import jwt
 from django.db.models import Q
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import BasePermission
 
-from ams_shared.jwt.validator import ServiceJWTAuthentication
 from central_auth.authentication import CentralAuthAuthentication, CentralAuthUser
 
 
@@ -139,26 +137,16 @@ class StaffCentralAuthUser(CentralAuthUser):
 
 
 class DualAuthentication(BaseAuthentication):
-    """Routes to CentralAuthAuthentication (RS256, wrapped in
-    StaffCentralAuthUser) or the legacy ServiceJWTAuthentication (HS256)
-    based on the token's own `alg` header. Same routing shape as C1-C11."""
+    """Phase D-R4: HS256 (legacy ServiceJWTAuthentication) verification
+    removed — central auth (RS256, wrapped in StaffCentralAuthUser) is the
+    only live path. See docs/PHASE_D_R4R6_REMOVAL_RESULT.md."""
 
     def authenticate(self, request):
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if not auth_header.startswith('Bearer '):
+        result = CentralAuthAuthentication().authenticate(request)
+        if result is None:
             return None
-        token = auth_header.split(' ', 1)[1]
-        try:
-            header = jwt.get_unverified_header(token)
-        except jwt.InvalidTokenError:
-            return None
-        if header.get('alg') == 'RS256':
-            result = CentralAuthAuthentication().authenticate(request)
-            if result is None:
-                return None
-            raw_user, tok = result
-            return StaffCentralAuthUser(raw_user.claims), tok
-        return ServiceJWTAuthentication().authenticate(request)
+        raw_user, tok = result
+        return StaffCentralAuthUser(raw_user.claims), tok
 
     def authenticate_header(self, request):
         return 'Bearer'

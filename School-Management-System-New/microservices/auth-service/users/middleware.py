@@ -5,13 +5,55 @@ Superadmin users bypass this filter.
 Supports ASGI/Asyncio by using contextvars instead of threading.local.
 """
 from contextvars import ContextVar
-from ams_shared.jwt.validator import ServiceJWTAuthentication
+from central_auth.authentication import CentralAuthAuthentication, CentralAuthUser
 from rest_framework.exceptions import AuthenticationFailed
 
 # Context variables to hold the current organization and user.
 # These are safer for ASGI/Asyncio (Daphne/Uvicorn) than threading.local.
 _organization_var = ContextVar('organization', default=None)
 _user_var = ContextVar('user', default=None)
+
+
+class _BoolCallable:
+    """Behaves as a bool in a truthy/`or` context (`__bool__`) AND as a
+    zero-arg callable returning that same bool (`__call__`). Same trick as
+    org-service/staff-service's Phase C11/C12 wrappers."""
+
+    __slots__ = ('_value',)
+
+    def __init__(self, value):
+        self._value = bool(value)
+
+    def __bool__(self):
+        return self._value
+
+    def __call__(self):
+        return self._value
+
+    def __repr__(self):
+        return repr(self._value)
+
+
+class _VendoredCentralAuthUser(CentralAuthUser):
+    """Wraps a raw CentralAuthUser to duck-type this vendored
+    users/managers.py's expectations (`user.is_superadmin()` — a CALLABLE
+    here and on the local User model, vs a plain bool claim on
+    CentralAuthUser; `user.role` — no equivalent on CentralAuthUser at
+    all). Same fix as org-service's OrgCentralAuthUser / staff-service's
+    StaffCentralAuthUser (Phase C11/C12), needed here for the first time in
+    Phase D-R6: this middleware previously only ever tried legacy HS256
+    (which always failed for an RS256 token, leaving get_current_user()
+    None) — `.is_superadmin()` was never actually invoked against a real
+    CentralAuthUser through this vendored path before, so this crash
+    (`TypeError: 'bool' object is not callable`) was latent, not
+    previously reachable. `role = None` fails closed the same way as
+    everywhere else in this codebase (never matches 'admin', falls through
+    to the org_id-scoped branch below)."""
+
+    def __init__(self, claims: dict):
+        super().__init__(claims)
+        self.is_superadmin = _BoolCallable(self.is_superadmin)
+        self.role = None
 
 
 def get_current_organization():
@@ -28,8 +70,16 @@ class OrganizationMiddleware:
     """
     Middleware that sets the current organization on each request.
     This allows models and querysets to automatically filter by organization.
-    Uses stateless JWT (ServiceJWTAuthentication) so it works across all
-    microservices without requiring the user to exist in the local DB.
+
+    Phase D-R6: legacy HS256 (ServiceJWTAuthentication) manual-auth fallback
+    removed — central auth (RS256) is the only live path, same as this
+    service's own <service>.dual_auth.DualAuthentication. This file is
+    vendored verbatim into every service that copies
+    microservices/auth-service/users/ at Docker build time (attendance,
+    campus, content, fees, notification, result, student, subject, support,
+    timetable — org-service and staff-service each override this file
+    instead, see their own users/middleware.py or
+    users_override/middleware.py). See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     """
 
     def __init__(self, get_response):
@@ -43,13 +93,12 @@ class OrganizationMiddleware:
         try:
             user = getattr(request, 'user', None)
 
-            # Stateless JWT auth — works across all microservices without a DB lookup.
             if not user or not user.is_authenticated:
                 try:
-                    auth = ServiceJWTAuthentication()
+                    auth = CentralAuthAuthentication()
                     result = auth.authenticate(request)
                     if result:
-                        user = result[0]
+                        user = _VendoredCentralAuthUser(result[0].claims)
                 except (AuthenticationFailed, Exception):
                     user = None
 

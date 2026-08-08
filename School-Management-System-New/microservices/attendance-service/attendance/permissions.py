@@ -14,8 +14,14 @@ class HasAttendanceViewPermission(permissions.BasePermission):
     """
     Gate for the Unified Attendance Review endpoint.
 
-    Checks the `view_attendance` toggle in the RolePermission table, which
-    Org Admins control per-role. Fails closed: no row = no access.
+    Legacy (HS256): checks the `view_attendance` toggle in the RolePermission
+    table, which Org Admins control per-role. Fails closed: no row = no
+    access. UNCHANGED by Phase D-b6 — still a live per-request `auth_db`
+    read, kept until auth-8001/HS256 is actually retired.
+
+    Central-auth (RS256): Phase D-b6 — resolves purely from the token's own
+    `perms` claim (built in the C-phase RBAC work), zero database calls. See
+    CENTRAL_PERM_CODENAME below for the catalog-gap caveat.
 
     Note this is deliberately narrower than CanViewAttendance below, which
     hardcodes role names and ignores the toggle entirely.
@@ -29,11 +35,36 @@ class HasAttendanceViewPermission(permissions.BasePermission):
     # layer (SCOPE_EMPTY, ROLL_ACCESS_DENIED, …) come from _error() instead.
     message = 'You do not have permission to view attendance records.'
 
+    # Phase D-b6: the sms.* catalog permission this maps to for a
+    # central-auth request. NOT currently in the catalog — read
+    # permissions/sms_catalog.py in full (central auth) and confirmed
+    # SMS_PERMISSIONS has no sms.attendance.* entry at all (only
+    # sms.assignment.*, sms.fee.*, sms.result.view). Deliberately NOT
+    # invented here — kept as the intended codename so adding it later is a
+    # catalog-only change. Until it exists, CentralAuthUser.has_perm() below
+    # can only ever return True via its own unconditional is_superadmin
+    # bypass; every other central role fails closed, which is correct: a
+    # permission that doesn't exist in the catalog cannot be granted, so
+    # denying is the honest answer, not a bug.
+    CENTRAL_PERM_CODENAME = 'sms.attendance.view'
+
     def has_permission(self, request, view):
         user = request.user
         if not (user and user.is_authenticated):
             return False
 
+        from central_auth.authentication import CentralAuthUser
+        if isinstance(user, CentralAuthUser):
+            # Central path: token-only, no DB call. has_perm() already
+            # bypasses for is_superadmin — that's the MASTER_ROLES-equivalent
+            # here. Central tokens carry no generic role string reliable
+            # enough to match legacy's org_admin/admin bypass (CentralAuthUser
+            # has no .role attribute at all — only .vms_role, which is only
+            # populated for VMS/HDMS logins), so that part of MASTER_ROLES
+            # isn't replicated; flagged in the result doc rather than faked.
+            return user.has_perm(self.CENTRAL_PERM_CODENAME)
+
+        # Legacy (HS256) path — UNCHANGED from before Phase D-b6.
         if getattr(user, 'is_superuser', False) or getattr(user, 'role', '') in MASTER_ROLES:
             return True
 

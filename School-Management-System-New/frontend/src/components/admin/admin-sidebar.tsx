@@ -10,7 +10,7 @@ import {
   Calendar, UserPlus, Plus, Clock, BarChart3, Briefcase, ScrollText
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
-import { apiGet } from "@/lib/api"
+import { getSidebarBadges } from "@/lib/api"
 import { usePermissions, getCurrentUserRole } from "@/lib/permissions"
 import { getSortedNavigation, type SortedNavItem } from "@/config/navigation"
 import { useOrgFeatures } from "@/hooks/useOrgFeatures"
@@ -163,7 +163,10 @@ export function AdminSidebar({ sidebarOpen, setSidebarOpen }: AdminSidebarProps)
     let active = true
     const load = async () => {
       try {
-        const data = await apiGet<Record<string, number>>("/api/sidebar-badges/")
+        // Phase D-blockers-clear: getSidebarBadges() is central-auth-aware
+        // (see lib/api.ts) — returns {} immediately under central rather
+        // than calling the auth-8001-only endpoint this used to hit directly.
+        const data = await getSidebarBadges()
         if (active && data && typeof data === "object") setBadges(data)
       } catch {
         /* ignore — no badges */

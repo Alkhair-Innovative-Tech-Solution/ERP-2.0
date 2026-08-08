@@ -1,4 +1,5 @@
 import { CacheManager } from './cache';
+import packageJson from '../../package.json';
 
 export function getApiBaseUrl(): string {
   // Server-side (Next.js API routes): use internal Docker URL to reach the gateway
@@ -1503,7 +1504,18 @@ export async function getAvailableStudentsForClassroom(classroomId: number) {
   }
 }
 
+// Phase D-blockers-clear: /api/current-user/ is served only by auth-8001.
+// Under central, there's no live "refresh from the server" source yet for
+// this (central auth's own /api/auth/me only resolves Employee/SuperAdmin,
+// not NonStaffIdentity — see docs/PHASE_D_B1_SMS_LOGIN_RESULT.md's known
+// gap — so it can't serve students either way). Use the token/adapter
+// source instead: the stored sis_user (populated at login, and by
+// D-b4-fix's /me merge for campus_id/level_id) is this session's freshest
+// available principal data. No network call under central.
 export async function getCurrentUserProfile() {
+  if (getAuthSource() === 'central') {
+    return getStoredUserProfile();
+  }
   try {
     return await apiGet(API_ENDPOINTS.CURRENT_USER_PROFILE);
   } catch (error) {
@@ -4751,7 +4763,46 @@ export async function getStudentApprovedRetests(studentId: number) {
   catch (error) { console.error('Failed to fetch student approved retests:', error); return []; }
 }
 
+// Phase D-blockers-clear: /api/sidebar-badges/ is served only by auth-8001
+// (users/views.py's sidebar_badges — a single endpoint that reaches
+// directly into 4 OTHER services' databases — result_db, timetable_db,
+// attendance_db, staff_db — via raw psycopg2, branching on the legacy
+// _TokenUser's plain .role string). There's no one SMS service that owns
+// this data; central-auth tokens have no equivalent generic .role either
+// (CentralAuthUser only has person_type/vms_role — see D-b4-fix). Properly
+// rebuilding this as a central-auth-aware, per-service-delegating
+// aggregator is a real, multi-service project, not a "repoint" — flagged
+// here rather than faked or half-built. Under central, this wrapper skips
+// the network call outright (the caller, admin-sidebar.tsx, already
+// treats an empty/failed result as "no badges" — same visible behavior as
+// today's failure, just without an actual failed request against a
+// stopped host).
+export async function getSidebarBadges(): Promise<Record<string, number>> {
+  if (getAuthSource() === 'central') {
+    return {};
+  }
+  try {
+    return await apiGet<Record<string, number>>('/api/sidebar-badges/');
+  } catch {
+    return {};
+  }
+}
+
+// Phase D-blockers-clear: /api/version/ is served only by auth-8001 (a
+// SystemVersion model + admin-publish workflow that has no central-auth or
+// other-SMS-service equivalent — flagged, not rebuilt, since inventing a
+// fake release-notes/build-tracking backend elsewhere would be a bigger,
+// unrelated feature migration). Under central, skip the network call
+// entirely (no point hitting a host that's stopped) and fall back to the
+// frontend's own package.json version — a real, honest value, just not
+// the same "admin can publish release notes" feature. Legacy path
+// unchanged, still tries the live auth-8001 endpoint.
 export async function fetchSystemVersion(): Promise<{ version: string | null; build: number | null; display: string | null; release_notes: string; created_at: string } | null> {
+  if (getAuthSource() === 'central') {
+    const pkgVersion = packageJson.version || null;
+    if (!pkgVersion) return null;
+    return { version: pkgVersion, build: null, display: `v${pkgVersion}`, release_notes: '', created_at: '' };
+  }
   try {
     const baseUrl = getApiBaseUrl();
     const res = await fetch(`${baseUrl}/api/version/`, { cache: 'no-store' });

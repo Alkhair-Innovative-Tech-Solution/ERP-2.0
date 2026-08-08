@@ -303,88 +303,14 @@ def sync_teachers():
     return synced
 
 
-def _auth_conn():
-    return _src_conn(
-        host=os.getenv('AUTH_DB_HOST', 'postgres-auth'),
-        dbname=os.getenv('AUTH_DB_NAME', 'auth_db'),
-        user=os.getenv('AUTH_DB_USER', 'auth_user'),
-        password=os.getenv('AUTH_DB_PASSWORD', 'auth_pass'),
-    )
-
-
-def sync_staff_users():
-    """
-    Sync principal, coordinator, teacher, and admin user records from auth_db into
-    the local users_user table so staff attendance views can query them.
-    Enriches campus_id from principals_principal / coordinator_coordinator in staff_db
-    since the auth_db stores campus_id as NULL for most staff roles.
-    """
-    STAFF_ROLES = ('principal', 'coordinator', 'teacher', 'org_admin',
-                   'accounts_officer', 'admissions_counselor', 'compliance_officer')
-
-    # --- 1. Pull staff users from auth_db ---
-    try:
-        conn = _auth_conn()
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            placeholders = ', '.join(['%s'] * len(STAFF_ROLES))
-            cur.execute(
-                f"SELECT * FROM users_user WHERE role IN ({placeholders}) AND is_deleted = false",
-                list(STAFF_ROLES)
-            )
-            rows = cur.fetchall()
-            col_names = [d.name for d in cur.description]
-        conn.close()
-    except Exception as e:
-        logger.warning("sync_staff_users: cannot reach auth DB: %s", e)
-        return 0
-
-    if not rows:
-        return 0
-
-    # Convert RealDictRow → regular dicts so we can mutate them
-    rows = [dict(r) for r in rows]
-
-    # --- 2. Enrich campus_id from staff_db ---
-    campus_by_code = {}  # employee_code → campus_id
-    campus_by_email = {}  # email → campus_id
-    try:
-        conn = _staff_conn()
-        with conn.cursor() as cur:
-            # Principals
-            cur.execute("SELECT employee_code, email, campus_id FROM principals_principal WHERE is_deleted = false")
-            for code, email, cid in cur.fetchall():
-                if cid:
-                    if code:
-                        campus_by_code[code] = cid
-                    if email:
-                        campus_by_email[email] = cid
-            # Coordinators
-            cur.execute("SELECT employee_code, email, campus_id FROM coordinator_coordinator WHERE is_deleted = false")
-            for code, email, cid in cur.fetchall():
-                if cid:
-                    if code:
-                        campus_by_code[code] = cid
-                    if email:
-                        campus_by_email[email] = cid
-            # Teachers (current_campus_id)
-            cur.execute("SELECT employee_code, email, current_campus_id FROM teachers_teacher")
-            for code, email, cid in cur.fetchall():
-                if cid:
-                    if code:
-                        campus_by_code[code] = cid
-                    if email:
-                        campus_by_email[email] = cid
-        conn.close()
-    except Exception as e:
-        logger.warning("sync_staff_users: cannot reach staff DB for campus enrichment: %s", e)
-
-    for row in rows:
-        if not row.get('campus_id'):
-            code = row.get('username') or row.get('employee_code') or ''
-            email = row.get('email') or ''
-            row['campus_id'] = campus_by_code.get(code) or campus_by_email.get(email)
-
-    return _upsert_table(rows, col_names, 'users_user')
+# Phase D-R6: sync_staff_users()/_auth_conn() removed — pulled staff users
+# (principal/coordinator/teacher/etc.) from auth-8001's own users_user
+# table, which no longer exists (postgres-auth dropped in D-R5). This was
+# already a dead sync for any central-auth staff member (a CentralAuthUser
+# was never written to auth-8001's users_user table by any dual-write
+# path), and now fails outright ("could not translate host name
+# postgres-auth") on every container start — harmless (caught, logged,
+# non-fatal) but pointless. See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
 
 class Command(BaseCommand):
@@ -422,7 +348,3 @@ class Command(BaseCommand):
         self.stdout.write("Syncing students...")
         n = sync_students()
         self.stdout.write(f"  {n} students synced.")
-
-        self.stdout.write("Syncing staff users (principal/coordinator/teacher)...")
-        n = sync_staff_users()
-        self.stdout.write(f"  {n} staff users synced.")

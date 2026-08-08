@@ -4,23 +4,19 @@ from .models import Attendance
 
 User = get_user_model()
 
-# Roles that bypass the RolePermission table entirely (master roles).
-# Mirrors users.permissions.HasDynamicPermission, plus 'admin' — which
-# scope_resolver already treats as org_admin.
-MASTER_ROLES = ('superadmin', 'org_admin', 'admin')
-
 
 class HasAttendanceViewPermission(permissions.BasePermission):
     """
     Gate for the Unified Attendance Review endpoint.
 
-    Legacy (HS256): checks the `view_attendance` toggle in the RolePermission
-    table, which Org Admins control per-role. Fails closed: no row = no
-    access. UNCHANGED by Phase D-b6 — still a live per-request `auth_db`
-    read, kept until auth-8001/HS256 is actually retired.
+    Phase D-R6: the legacy (HS256) branch — a live per-request `auth_db`
+    read of the RolePermission toggle — is removed. It was already
+    unreachable dead code after D-R4 (DualAuthentication can only ever
+    return a CentralAuthUser or None now, never a legacy _TokenUser), and
+    auth_db itself no longer exists (postgres-auth dropped in D-R5).
 
-    Central-auth (RS256): Phase D-b6 — resolves purely from the token's own
-    `perms` claim (built in the C-phase RBAC work), zero database calls. See
+    Resolves purely from the central-auth token's own `perms` claim (built
+    in the C-phase RBAC work), zero database calls. See
     CENTRAL_PERM_CODENAME below for the catalog-gap caveat.
 
     Note this is deliberately narrower than CanViewAttendance below, which
@@ -54,51 +50,19 @@ class HasAttendanceViewPermission(permissions.BasePermission):
             return False
 
         from central_auth.authentication import CentralAuthUser
-        if isinstance(user, CentralAuthUser):
-            # Central path: token-only, no DB call. has_perm() already
-            # bypasses for is_superadmin — that's the MASTER_ROLES-equivalent
-            # here. Central tokens carry no generic role string reliable
-            # enough to match legacy's org_admin/admin bypass (CentralAuthUser
-            # has no .role attribute at all — only .vms_role, which is only
-            # populated for VMS/HDMS logins), so that part of MASTER_ROLES
-            # isn't replicated; flagged in the result doc rather than faked.
-            return user.has_perm(self.CENTRAL_PERM_CODENAME)
-
-        # Legacy (HS256) path — UNCHANGED from before Phase D-b6.
-        if getattr(user, 'is_superuser', False) or getattr(user, 'role', '') in MASTER_ROLES:
-            return True
-
-        # RolePermission rows live in auth_db and are NOT synced here, and the
-        # JWT _TokenUser has org_id rather than an organization FK — so read
-        # the toggle cross-DB instead of via the local (empty) table.
-        org_id = getattr(user, 'organization_id', None) or getattr(user, 'org_id', None)
-        if not org_id:
+        if not isinstance(user, CentralAuthUser):
+            # Unreachable post-D-R4 (see docstring) — fail closed rather
+            # than silently allowing an unrecognized user type.
             return False
-        import os
-        try:
-            import psycopg2
-            conn = psycopg2.connect(
-                host=os.environ.get('AUTH_DB_HOST', 'postgres-auth'),
-                dbname=os.environ.get('AUTH_DB_NAME', 'auth_db'),
-                user=os.environ.get('AUTH_DB_USER', 'auth_user'),
-                password=os.environ.get('AUTH_DB_PASSWORD', 'auth_pass'),
-                connect_timeout=5,
-            )
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT 1 FROM users_role_permission "
-                        "WHERE organization_id = %s AND role = %s "
-                        "AND permission_codename = 'view_attendance' AND is_allowed = true "
-                        "LIMIT 1",
-                        (org_id, user.role),
-                    )
-                    return cur.fetchone() is not None
-            finally:
-                conn.close()
-        except Exception:
-            # Fail closed, same as a missing RolePermission row.
-            return False
+
+        # Token-only, no DB call. has_perm() already bypasses for
+        # is_superadmin — that's the MASTER_ROLES-equivalent here. Central
+        # tokens carry no generic role string reliable enough to match
+        # legacy's org_admin/admin bypass (CentralAuthUser has no .role
+        # attribute at all — only .vms_role, which is only populated for
+        # VMS/HDMS logins), so that part of MASTER_ROLES isn't replicated;
+        # flagged in the result doc rather than faked.
+        return user.has_perm(self.CENTRAL_PERM_CODENAME)
 
 
 class CanMarkAttendance(permissions.BasePermission):

@@ -1,7 +1,4 @@
 import os
-import json
-import urllib.request
-import urllib.error
 from django.core.management.base import BaseCommand
 from django.contrib.auth.hashers import make_password
 from django.db import connection
@@ -9,43 +6,12 @@ from django.db import connection
 from services.central_auth_sync_service import sync_staff_to_central_auth
 
 
-AUTH_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001")
-SECRET = os.getenv("INTERNAL_SERVICE_SECRET", "")
 DEFAULT_PASSWORD = "12345"
 
-
-def _sync_to_auth(email, username, first_name, last_name, role, org_data):
-    # Phase D-R2: flag-gated off by default in this environment (see
-    # user_creation_service.py's identical WRITE_TO_AUTH_8001 gate for the
-    # full rationale) — this backfill command already calls
-    # sync_staff_to_central_auth() below regardless.
-    if os.getenv('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
-        return True, "skipped (WRITE_TO_AUTH_8001=false)"
-    payload = json.dumps({
-        "email": email,
-        "password": DEFAULT_PASSWORD,
-        "username": username,
-        "first_name": first_name,
-        "last_name": last_name,
-        "role": role,
-        "organization": org_data,
-        "has_changed_default_password": False,
-    }).encode()
-    req = urllib.request.Request(
-        f"{AUTH_URL}/api/internal/create-user/",
-        data=payload,
-        headers={"Content-Type": "application/json", "X-Internal-Secret": SECRET},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return True, f"created (HTTP {resp.status})"
-    except urllib.error.HTTPError as e:
-        if e.code == 409:
-            return True, "already exists in auth"
-        return False, f"HTTP {e.code}: {e.read().decode()[:200]}"
-    except Exception as e:
-        return False, str(e)
+# Phase D-R6: _sync_to_auth() (the auth-8001 write, flag-gated by
+# WRITE_TO_AUTH_8001) is removed — auth-8001 no longer exists (D-R5). This
+# command now only does local-user creation + the central-auth dual-write
+# below. See docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
 
 def _fetch_all_staff(staff_type):

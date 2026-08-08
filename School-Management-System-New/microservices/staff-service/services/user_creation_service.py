@@ -118,8 +118,9 @@ class UserCreationService:
                 entity.employee_code = employee_code
                 entity.save()
 
-            # Sync to auth-service OUTSIDE transaction so HTTP timeout never rolls back DB write
-            UserCreationService._sync_user_to_auth(user, entity)
+            # Phase D-R6: the auth-8001 sync (_sync_user_to_auth, below) is
+            # removed — auth-8001 no longer exists (D-R5). See
+            # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
             # Phase B4 dual-write: also land this identity in central auth's
             # SMS01 tenant, no-ops unless SYNC_TO_CENTRAL_AUTH=true. Covers
@@ -147,64 +148,6 @@ class UserCreationService:
         except Exception as e:
             return None, f"Failed to create user: {str(e)}"
     
-    @staticmethod
-    def _sync_user_to_auth(user, entity):
-        """Call auth-service internal API to create the user there too.
-
-        Phase D-R2: flag-gated off by default in this environment
-        (WRITE_TO_AUTH_8001, defaults 'true' in code so nothing changes
-        anywhere this env var isn't explicitly set — this environment's own
-        .env sets it to 'false' for the cutover). Central auth already
-        carries this write (sync_staff_entity_to_central_auth, called
-        right after this function returns — see create_user_from_entity).
-        Kept as a flag, not a deletion, so this is a one-line revert if
-        auth-8001 needs to be fed again."""
-        import os
-        if os.getenv('WRITE_TO_AUTH_8001', 'true').lower() == 'false':
-            print(f"[AUTH-SYNC] Skipped for {user.email} (WRITE_TO_AUTH_8001=false)")
-            return
-        import json
-        import urllib.request, urllib.error
-        auth_url = os.getenv('AUTH_SERVICE_URL', 'http://auth-service:8001')
-        secret = os.getenv('INTERNAL_SERVICE_SECRET', '')
-        org = getattr(entity, 'organization', None)
-        org_data = None
-        if org:
-            org_data = {
-                'id': org.id,
-                'name': org.name,
-                'code_prefix': getattr(org, 'code_prefix', None),
-                'code_pattern': getattr(org, 'code_pattern', 'PREFIX_SEQ4'),
-            }
-        payload = json.dumps({
-            'email': user.email,
-            'password': UserCreationService.DEFAULT_PASSWORD,
-            'username': user.username,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'role': user.role,
-            'organization': org_data,
-            'campus_id': user.campus_id,
-            'phone_number': getattr(user, 'phone_number', '') or '',
-            'has_changed_default_password': False,
-        }).encode()
-        try:
-            req = urllib.request.Request(
-                f'{auth_url}/api/internal/create-user/',
-                data=payload,
-                headers={'Content-Type': 'application/json', 'X-Internal-Secret': secret},
-                method='POST',
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                print(f"[AUTH-SYNC] User {user.email} created in auth-service (status {resp.status}).")
-        except urllib.error.HTTPError as e:
-            if e.code == 409:
-                print(f"[AUTH-SYNC] User {user.email} already exists in auth-service.")
-            else:
-                print(f"[AUTH-SYNC] Warning: auth-service returned {e.code}: {e.read().decode()[:200]}")
-        except Exception as e:
-            print(f"[AUTH-SYNC] Could not reach auth-service: {e}")
-
     @staticmethod
     def create_users_for_existing_entities():
         """Create users for existing entities without users"""

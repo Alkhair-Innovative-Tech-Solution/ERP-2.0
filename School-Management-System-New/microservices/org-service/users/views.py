@@ -2511,22 +2511,10 @@ def invoice_approve(request, pk):
     update_fields.append('is_active')
     org.save(update_fields=update_fields)
 
-    # Sync payment_status + is_active to auth-service
-    # Phase D-R2: flag-gated off by default in this environment.
-    import os
-    if os.environ.get('WRITE_TO_AUTH_8001', 'true').lower() != 'false':
-        try:
-            import requests as http_requests
-            auth_url = os.environ.get('AUTH_SERVICE_URL', 'http://auth-service:8001')
-            internal_secret = os.environ.get('INTERNAL_SERVICE_SECRET', '')
-            http_requests.post(
-                f'{auth_url}/api/internal/sync-org/',
-                json={'id': org.id, 'is_active': True, 'payment_status': 'paid'},
-                headers={'X-Internal-Secret': internal_secret},
-                timeout=5,
-            )
-        except Exception as e:
-            print(f'[WARN] org sync to auth-service failed: {e}')
+    # Phase D-R6: the auth-8001 payment_status+is_active sync (POST
+    # /api/internal/sync-org/, flag-gated by WRITE_TO_AUTH_8001) is removed
+    # — auth-8001 no longer exists (D-R5). See
+    # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
 
     # Phase D-b5 dual-write: same is_active activation, also to central auth.
     from services.central_auth_sync_service import sync_org_to_central_auth

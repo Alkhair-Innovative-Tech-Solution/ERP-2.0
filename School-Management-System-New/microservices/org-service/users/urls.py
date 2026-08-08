@@ -2,7 +2,6 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     UserRegistrationView,
-    UserLoginView,
     UserProfileView,
     UserListView,
     check_email_exists,
@@ -43,7 +42,11 @@ urlpatterns = [
     path('plans/<int:pk>/', SubscriptionPlanDetailView.as_view(), name='plan_detail'),
     
     # Authentication endpoints
-    path('auth/login/', UserLoginView.as_view(), name='user_login'),
+    # Phase D-R4/R6 follow-up: auth/login/ (UserLoginView, minted HS256
+    # tokens) removed — dead-in-practice (nginx never routed it here; only
+    # reachable by hitting org-service's port directly) and HS256
+    # verification is retired everywhere. See
+    # docs/PHASE_D_R4R6_REMOVAL_RESULT.md.
     path('auth/register/', UserRegistrationView.as_view(), name='user_register'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 

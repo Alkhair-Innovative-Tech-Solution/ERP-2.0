@@ -235,3 +235,69 @@ R6 above) — a real product gap (forgot-password, change-password, and a few
 `/api/users/*` admin actions are all non-functional), not newly introduced,
 but larger than what was previously tracked. Worth its own phase to either
 repoint these to central auth or explicitly deprecate them.
+
+## Follow-up: both flagged items acted on
+
+Both items above were revisited and resolved, following the same
+verify-before-delete/prove-before-ship discipline as the rest of this phase.
+
+**org-service's `UserLoginView` deleted.** `users/views.py`'s `UserLoginView`
+(and its `UserLoginSerializer`) and the `auth/login/` URL registration are
+gone — confirmed via `manage.py shell`'s `Client()` that the route now 404s
+inside org-service itself, not just unreachable via nginx.
+
+**The broken-endpoint list: investigated further, and the fix turned out to
+be different from "delete the frontend code."** Checking `org-service/users/urls.py`
+found that `/api/profile/`, `/api/current-user/` (+ `upload-photo`),
+`/api/users/` (+ `org-staff`, `switch-role`, `toggle-active`),
+`/api/permissions/`, and every one of the password-reset/OTP routes are
+**already fully implemented, live views in org-service** — confirmed by
+hitting `org-service:8002` directly (400/401 responses, not 502/connection
+errors). The only reason they'd been broken since D-R1/R3 is that nginx
+routed them at `auth-service:8001` instead of `org-service:8002` — a routing
+bug, not a missing backend. Repointed all of them to `org-service:8002`
+instead of deleting the frontend code that calls them. `/api/version/` and
+`/api/sidebar-badges/` were the only two from the original list confirmed to
+have **no** live backend anywhere (auth-service-only) — those stay removed,
+and their frontend code (`getSidebarBadges()`, `fetchSystemVersion()`,
+`releaseNewVersion()` — the last one dead code, not called from any UI
+component) was simplified to drop the now-permanently-dead legacy branch.
+
+**Repointing surfaced 3 more central-auth crashes**, all in code that was
+*never actually reachable* by a central-auth token before (nginx pointed
+these paths at auth-8001 since before central auth existed) — same root
+cause as the two D-R4 regressions above: complex, pre-existing view logic
+written against a local `User` model, exercised end-to-end with a real
+`CentralAuthUser` for the first time only once the routing was fixed:
+
+- `current_user_profile` — read `user.first_name` directly (`AttributeError`
+  on `OrgCentralAuthUser`). Fixed with an early `isinstance(user, CentralAuthUser)`
+  branch returning the honest subset of fields actually on the token (id,
+  username, email, full_name, employee_code) — the role-specific
+  Teacher/Coordinator/Principal/Student resolution below it would never have
+  fired anyway, since `OrgCentralAuthUser.role` is always `None` (fail-closed
+  by design, Phase C11).
+- `UserProfileView` (`/api/profile/`) — `UserSerializer` is a `ModelSerializer`
+  bound to the local `User` model; several of its declared fields
+  (`phone_number`, `is_verified`, `last_login`, `created_at`, `updated_at`,
+  `campus`) don't exist on `OrgCentralAuthUser` at all. Fixed by overriding
+  `get()` to return the same reduced shape for a central token instead of
+  running it through the incompatible serializer.
+- `UserListView` (`/api/users/`) — its final `else` fallback
+  (`User.objects.filter(id=user.id)`) assumed `user.id` was this service's
+  own integer PK; a central token's `.id` is a UUID, so this raised
+  `ValueError: Field 'id' expected a number but got '<uuid>'`. Fixed with an
+  explicit `isinstance` branch returning an empty queryset for a
+  non-superadmin central token — no local `User` row backs one here
+  (`org_id`/`role` are always `None` on `OrgCentralAuthUser`), so there's no
+  honest self-only filter to fall back to; same fail-closed precedent used
+  everywhere else in this service for unresolvable role concepts.
+
+All three found and fixed via the same method as the two D-R4 regressions:
+real request against a real central-auth token, not just code review — a
+`django.test.Client` call reproduced each traceback before the fix, and the
+same call confirmed 200 after. Full re-verification after rebuild: `current-user`
+→ 200, `profile` → 200, `users` → 200, `org-staff`/`permissions` → 403
+(correct fail-closed for a non-superadmin token), the OTP/password-reset
+endpoints → 400/404 (real validation responses, not 502s). Synthetic test
+employee created and cleaned up again for this verification pass.

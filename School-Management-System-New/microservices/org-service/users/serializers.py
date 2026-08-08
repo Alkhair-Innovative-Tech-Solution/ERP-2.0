@@ -276,19 +276,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(password=password, **validated_data)
         return user
 
-class UserLoginSerializer(serializers.Serializer):
-    """
-    User login serializer
-    """
-    email = serializers.CharField()  # Changed from EmailField to CharField
-    password = serializers.CharField()
-    
-    def validate_email(self, value):
-        # Check if user exists with either email or username (employee code) - Case Insensitive
-        if not User.objects.filter(email__iexact=value).exists() and not User.objects.filter(username__iexact=value).exists():
-            raise serializers.ValidationError("User with this email or employee code does not exist")
-        return value
-
 class UserUpdateSerializer(serializers.ModelSerializer):
     """
     User update serializer

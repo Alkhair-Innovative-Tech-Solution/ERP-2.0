@@ -4763,57 +4763,39 @@ export async function getStudentApprovedRetests(studentId: number) {
   catch (error) { console.error('Failed to fetch student approved retests:', error); return []; }
 }
 
-// Phase D-blockers-clear: /api/sidebar-badges/ is served only by auth-8001
-// (users/views.py's sidebar_badges — a single endpoint that reaches
-// directly into 4 OTHER services' databases — result_db, timetable_db,
-// attendance_db, staff_db — via raw psycopg2, branching on the legacy
-// _TokenUser's plain .role string). There's no one SMS service that owns
-// this data; central-auth tokens have no equivalent generic .role either
-// (CentralAuthUser only has person_type/vms_role — see D-b4-fix). Properly
-// rebuilding this as a central-auth-aware, per-service-delegating
-// aggregator is a real, multi-service project, not a "repoint" — flagged
-// here rather than faked or half-built. Under central, this wrapper skips
-// the network call outright (the caller, admin-sidebar.tsx, already
-// treats an empty/failed result as "no badges" — same visible behavior as
-// today's failure, just without an actual failed request against a
-// stopped host).
+// Phase D-R4R6 follow-up: /api/sidebar-badges/ was served only by
+// auth-8001 (users/views.py's sidebar_badges — a single endpoint that
+// reached directly into 4 OTHER services' databases — result_db,
+// timetable_db, attendance_db, staff_db — via raw psycopg2, branching on
+// the legacy _TokenUser's plain .role string). auth-8001 is retired
+// (D-R5) and there's no one SMS service that owns this data; central-auth
+// tokens have no equivalent generic .role either (CentralAuthUser only
+// has person_type/vms_role — see D-b4-fix). Properly rebuilding this as a
+// central-auth-aware, per-service-delegating aggregator is a real,
+// multi-service project, not a quick repoint — flagged, not built. The
+// legacy branch (a live network call to a host that no longer exists) is
+// removed; the caller (admin-sidebar.tsx) already treats an empty result
+// as "no badges", same visible behavior as before, just without an
+// actual failed request.
 export async function getSidebarBadges(): Promise<Record<string, number>> {
-  if (getAuthSource() === 'central') {
-    return {};
-  }
-  try {
-    return await apiGet<Record<string, number>>('/api/sidebar-badges/');
-  } catch {
-    return {};
-  }
+  return {};
 }
 
-// Phase D-blockers-clear: /api/version/ is served only by auth-8001 (a
-// SystemVersion model + admin-publish workflow that has no central-auth or
+// Phase D-R4R6 follow-up: /api/version/ was served only by auth-8001 (a
+// SystemVersion model + admin-publish workflow with no central-auth or
 // other-SMS-service equivalent — flagged, not rebuilt, since inventing a
 // fake release-notes/build-tracking backend elsewhere would be a bigger,
-// unrelated feature migration). Under central, skip the network call
-// entirely (no point hitting a host that's stopped) and fall back to the
-// frontend's own package.json version — a real, honest value, just not
-// the same "admin can publish release notes" feature. Legacy path
-// unchanged, still tries the live auth-8001 endpoint.
+// unrelated feature migration). auth-8001 is retired (D-R5), so the
+// legacy branch (a live fetch to a host that no longer exists) is
+// removed — falls back to the frontend's own package.json version
+// unconditionally now, a real, honest value, just not the same "admin
+// can publish release notes" feature.
 export async function fetchSystemVersion(): Promise<{ version: string | null; build: number | null; display: string | null; release_notes: string; created_at: string } | null> {
-  if (getAuthSource() === 'central') {
-    const pkgVersion = packageJson.version || null;
-    if (!pkgVersion) return null;
-    return { version: pkgVersion, build: null, display: `v${pkgVersion}`, release_notes: '', created_at: '' };
-  }
-  try {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(`${baseUrl}/api/version/`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+  const pkgVersion = packageJson.version || null;
+  if (!pkgVersion) return null;
+  return { version: pkgVersion, build: null, display: `v${pkgVersion}`, release_notes: '', created_at: '' };
 }
 
-export async function releaseNewVersion(data: { version: string; release_notes?: string }, token: string): Promise<any> {
-  try { return await apiPost('/api/version/release/', data); }
-  catch (error) { console.error('Failed to release version:', error); throw error; }
-}
+// Phase D-R4R6 follow-up: releaseNewVersion() (POST /api/version/release/,
+// auth-8001-only, retired in D-R5) removed — dead code, not called from
+// any UI component.

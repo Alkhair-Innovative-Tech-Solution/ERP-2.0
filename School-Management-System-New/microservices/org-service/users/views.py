@@ -3,13 +3,11 @@ from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 from .models import User, PasswordChangeOTP, RolePermission, Organization, SubscriptionPlan
 from .serializers import (
-    UserSerializer, UserRegistrationSerializer, UserLoginSerializer, 
+    UserSerializer, UserRegistrationSerializer,
     RolePermissionSerializer, OrganizationSerializer, OrganizationCreateSerializer,
     SubscriptionPlanSerializer, UserUpdateSerializer
 )
@@ -141,284 +139,6 @@ class UserRegistrationView(generics.CreateAPIView):
 
         serializer.save()
 
-class UserLoginView(generics.GenericAPIView):
-    """
-    User login endpoint
-    """
-    serializer_class = UserLoginSerializer
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        email_or_code = serializer.validated_data['email']
-        password = serializer.validated_data['password']
-        
-        # Authenticate using custom backend (supports both email and username)
-        user = authenticate(request, username=email_or_code, password=password)
-        
-        if user and user.is_active:
-            # Check if organization is active (for non-superadmins)
-            if _get_org(user) and not _get_org(user).is_active and not user.is_superadmin():
-                return Response({
-                    'error': 'Your organization is inactive. Please contact your administrator.'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Sync email from profile if needed (Self-healing for email mismatches)
-            self._sync_email_from_profile(user)
-            
-            # Check if user needs to change password
-            if not user.has_changed_default_password:
-                # Students get a direct session token (no email OTP required)
-                if user.role == 'student':
-                    otp_entry = PasswordChangeOTP.objects.create(
-                        user=user,
-                        otp_code='000000',
-                    )
-                    return Response({
-                        'requires_password_change': True,
-                        'requires_direct_change': True,
-                        'user_role': user.role,
-                        'user_email': user.email,
-                        'change_session_token': otp_entry.session_token,
-                        'message': 'Password change required.'
-                    }, status=status.HTTP_200_OK)
-                return Response({
-                    'requires_password_change': True,
-                    'user_email': user.email,
-                    'message': 'Password change required. Please verify your email to proceed.'
-                }, status=status.HTTP_200_OK)
-            
-            # Generate JWT tokens (embed token_version for session invalidation)
-            refresh = RefreshToken.for_user(user)
-            refresh['token_version'] = user.token_version
-            
-            # Update last login timestamp + IP
-            user.last_login = timezone.now()
-            user.last_login_ip = self.get_client_ip(request)
-            user.save(update_fields=['last_login', 'last_login_ip'])
-            
-            # Get complete user profile
-            user_profile = self.get_complete_user_profile(user)
-            
-            # Build organization context
-            org_data = None
-            if _get_org(user):
-                org = _get_org(user)
-                org_data = {
-                    'id': org.id,
-                    'name': org.name,
-                    'max_users': org.max_users,
-                    'max_students': org.max_students,
-                    'max_campuses': org.max_campuses,
-                    'used_users': org.organization_users.count(),
-                    'used_students': org.students.count(),
-                    'used_campuses': org.campuses.count(),
-                    'enabled_features': org.enabled_features,
-                }
-            
-            return Response({
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-                'user': user_profile,
-                'organization': org_data,
-                'requires_password_change': False
-            }, status=status.HTTP_200_OK)
-        
-        return Response({
-            'error': 'Invalid credentials'
-        }, status=status.HTTP_401_UNAUTHORIZED)
-
-    def _sync_email_from_profile(self, user):
-        """
-        Check if user's email matches their profile email.
-        If not, update user email to match profile (Source of Truth).
-        """
-        try:
-            profile_email = None
-            
-            if user.role == 'teacher':
-                from teachers.models import Teacher
-                try:
-                    # Try getting by employee code (username)
-                    teacher = Teacher.objects.get(employee_code=user.username)
-                    if teacher.email:
-                        profile_email = teacher.email
-                except Teacher.DoesNotExist:
-                    pass
-                    
-            elif user.role == 'coordinator':
-                from coordinator.models import Coordinator
-                try:
-                    coordinator = Coordinator.get_for_user(user)
-                    if coordinator and coordinator.email:
-                        profile_email = coordinator.email
-                except Exception:
-                    pass
-                    
-            elif user.role == 'principal':
-                from principals.models import Principal
-                try:
-                    principal = Principal.objects.get(employee_code=user.username)
-                    if principal.email:
-                        profile_email = principal.email
-                except Principal.DoesNotExist:
-                    pass
-            
-            # If we found a profile email and it differs from auth user email
-            if profile_email and profile_email != user.email:
-                print(f"[AUTO-SYNC] Updating User email from {user.email} to {profile_email} (from {user.role} profile)")
-                
-                # Check if this email is already taken by another user (safety check)
-                if not User.objects.exclude(pk=user.pk).filter(email=profile_email).exists():
-                    user.email = profile_email
-                    user.save(update_fields=['email'])
-                else:
-                    print(f"[AUTO-SYNC] Skipped: Email {profile_email} already in use by another user")
-                    
-        except Exception as e:
-            print(f"[AUTO-SYNC] Error syncing email: {str(e)}")
-    
-    def get_complete_user_profile(self, user):
-        """Get complete user profile based on role"""
-        profile_data = {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'role': user.role,
-            'is_active': user.is_active,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-        }
-        
-        if user.role == 'principal':
-            try:
-                from principals.models import Principal
-                principal = Principal.objects.get(employee_code=user.username)
-                profile_data.update({
-                    'principal_id': principal.id,
-                    'campus_id': principal.campus.id if principal.campus else None,
-                    'campus_name': principal.campus.campus_name if principal.campus else None,
-                    'campus_code': principal.campus.campus_code if principal.campus else None,
-                    'full_name': principal.full_name,
-                    'contact_number': principal.contact_number,
-                    'employee_code': principal.employee_code,
-                    'shift': principal.shift,
-                    'signature': principal.signature,
-                })
-            except Principal.DoesNotExist:
-                pass
-                
-        elif user.role == 'coordinator':
-            try:
-                from coordinator.models import Coordinator
-                coordinator = Coordinator.get_for_user(user)
-                if coordinator:
-                    profile_data.update({
-                        'coordinator_id': coordinator.id,
-                        'campus_id': coordinator.campus.id if coordinator.campus else None,
-                        'campus_name': coordinator.campus.campus_name if coordinator.campus else None,
-                        'campus_code': coordinator.campus.campus_code if coordinator.campus else None,
-                        'level_id': coordinator.level.id if coordinator.level else None,
-                        'level_name': coordinator.level.name if coordinator.level else None,
-                        'full_name': coordinator.full_name,
-                        'contact_number': coordinator.contact_number,
-                        'employee_code': coordinator.employee_code,
-                        'signature': coordinator.signature,
-                    })
-            except Exception:
-                # Swallow errors and return base profile_data
-                pass
-                
-        elif user.role == 'teacher':
-            try:
-                from teachers.models import Teacher
-                teacher = Teacher.objects.get(employee_code=user.username)
-                # Build list of all assigned classrooms (M2M + FK back-ref)
-                m2m_ids = set(teacher.assigned_classrooms.values_list('id', flat=True))
-                fk_ids = set(teacher.classroom_set.values_list('id', flat=True))
-                all_cr_ids = m2m_ids | fk_ids
-                from classes.models import ClassRoom
-                all_classrooms = ClassRoom.objects.filter(id__in=all_cr_ids).select_related('grade', 'grade__level', 'grade__level__campus')
-                classrooms_list = []
-                for cr in all_classrooms:
-                    classrooms_list.append({
-                        'id': cr.id,
-                        'name': f"{cr.grade.name}-{cr.section}",
-                        'grade': cr.grade.name if cr.grade else None,
-                        'section': cr.section,
-                        'shift': cr.shift,
-                        'code': cr.code,
-                    })
-                profile_data.update({
-                    'teacher_id': teacher.id,
-                    'campus_id': teacher.current_campus.id if teacher.current_campus else None,
-                    'campus_name': teacher.current_campus.campus_name if teacher.current_campus else None,
-                    'full_name': teacher.full_name,
-                    'contact_number': teacher.contact_number,
-                    'employee_code': teacher.employee_code,
-                    'shift': teacher.shift,
-                    'photo': teacher.photo.url if teacher.photo else None,
-                    'assigned_classroom_id': teacher.assigned_classroom.id if teacher.assigned_classroom else None,
-                    'assigned_classroom_name': f"{teacher.assigned_classroom.grade.name}-{teacher.assigned_classroom.section}" if teacher.assigned_classroom else None,
-                    'is_class_teacher': teacher.is_class_teacher,
-                    'is_teacher_assistant': teacher.is_teacher_assistant,
-                    'assigned_classrooms': classrooms_list,
-                    'signature': teacher.signature,
-                })
-            except Teacher.DoesNotExist:
-                pass
-        
-        elif user.role == 'student':
-            try:
-                from students.models import Student
-                student = Student.objects.get(student_id=user.username)
-                profile_data.update({
-                    'student_db_id': student.id,
-                    'student_id': student.student_id,
-                    'student_code': student.student_code,
-                    'gr_no': student.gr_no,
-                    'name': student.name,
-                    'gender': student.gender,
-                    'campus_id': student.campus.id if student.campus else None,
-                    'campus_name': student.campus.campus_name if student.campus else None,
-                    'classroom_id': student.classroom.id if student.classroom else None,
-                    'classroom_name': (
-                        f"{student.classroom.grade.name}-{student.classroom.section}"
-                        if student.classroom else None
-                    ),
-                    'current_grade': student.current_grade,
-                    'section': student.section,
-                    'shift': student.shift,
-                    'enrollment_year': student.enrollment_year,
-                    'father_name': student.father_name,
-                    'photo': student.photo.url if student.photo else None,
-                })
-            except Student.DoesNotExist:
-                pass
-
-        # Add permissions for this user's role
-        # Fetch dynamic permissions from database for ALL roles (including superadmin)
-        role_perms = RolePermission.objects.filter(role=user.role)
-        permissions = {rp.permission_codename: rp.is_allowed for rp in role_perms}
-        # Ensure all permission codes exist (default True for superadmin, False for others)
-        default_value = user.role == 'superadmin'
-        for perm_code, _ in RolePermission.PERMISSION_CHOICES:
-            if perm_code not in permissions:
-                permissions[perm_code] = default_value
-        
-        profile_data['permissions'] = permissions
-        return profile_data
-    
-    def get_client_ip(self, request):
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
-
 class UserProfileView(generics.RetrieveUpdateAPIView):
     """
     User profile management
@@ -428,6 +148,30 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+    def get(self, request, *args, **kwargs):
+        # Phase D-R4R6 follow-up: UserSerializer is a ModelSerializer
+        # bound to the local User model — was never central-auth-aware,
+        # unreachable via the gateway (auth-8001-only route) until this
+        # phase repointed /api/profile/ to org-service. A wrapped
+        # OrgCentralAuthUser is missing several of its declared fields
+        # (phone_number, is_verified, last_login, created_at, updated_at,
+        # campus) entirely, so running it through UserSerializer crashes.
+        # Same reduced, honest shape as current_user_profile's central
+        # branch, rather than a partial/crashing ModelSerializer pass.
+        user = request.user
+        if isinstance(user, CentralAuthUser):
+            return Response({
+                'id': str(user.id),
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.full_name,
+                'last_name': '',
+                'role': None,
+                'campus': None,
+                'organization': None,
+            })
+        return super().get(request, *args, **kwargs)
 
 class UserListView(generics.ListAPIView):
     """
@@ -455,6 +199,20 @@ class UserListView(generics.ListAPIView):
         elif user.org_id:
             # Org-bound users only see users in their own organization
             qs = User.objects.filter(organization_id=user.org_id)
+        elif isinstance(user, CentralAuthUser):
+            # Phase D-R4R6 follow-up: this view was never central-auth-
+            # aware — unreachable via the gateway (auth-8001-only route)
+            # until this phase repointed /api/users/ to org-service. The
+            # `else` fallback below assumes `user.id` is this service's
+            # own integer PK (self-only visibility) — a central token's
+            # `.id` is a UUID, which crashes as an int-field filter value.
+            # No local User row backs a non-superadmin central token here
+            # (org_id/role are always None on OrgCentralAuthUser, fail-
+            # closed by design — see org_service/dual_auth.py), so there's
+            # no honest self-only filter to fall back to either. Empty
+            # queryset, same fail-closed precedent as every other
+            # unresolvable role gap in this service.
+            qs = User.objects.none()
         else:
             qs = User.objects.filter(id=user.id)
 
@@ -587,7 +345,28 @@ def current_user_profile(request):
     Get current user's profile with complete role-specific data
     """
     user = request.user
-    
+
+    # Phase D-R4R6 follow-up: this view was never central-auth-aware — it
+    # was unreachable via the gateway (an auth-8001-only nginx route)
+    # until this phase repointed /api/current-user/ to org-service. A
+    # wrapped OrgCentralAuthUser has no .first_name/.last_name/.photo/
+    # .campus (the base fields below) — and .role is always None on it
+    # (fail-closed by design, see org_service/dual_auth.py's module
+    # docstring), so none of the role-specific branches further down
+    # would ever fire for a central token anyway. Return the honest
+    # subset actually available on the token rather than crashing.
+    if isinstance(user, CentralAuthUser):
+        return Response({
+            'id': str(user.id),
+            'username': user.username,
+            'email': user.email,
+            'full_name': user.full_name,
+            'employee_code': user.employee_code,
+            'role': None,
+            'photo': None,
+            'campus': None,
+        })
+
     # Base user data
     user_data = {
         'id': user.id,

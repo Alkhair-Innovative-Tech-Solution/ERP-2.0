@@ -31,32 +31,24 @@ same as C3/C6/C8/C9) — reused here for `find_teacher`/`find_coordinator`/
 `find_principal`, same local DB-match technique (email or employee_code)
 established in C3, carried unchanged through every phase since.
 """
-import jwt
 from django.db.models import Q
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import BasePermission
 
-from ams_shared.jwt.validator import ServiceJWTAuthentication
 from central_auth.authentication import CentralAuthAuthentication, CentralAuthUser
 
 
 class DualAuthentication(BaseAuthentication):
-    """Routes to CentralAuthAuthentication (RS256) or the legacy
-    ServiceJWTAuthentication (HS256) based on the token's own `alg`
-    header. Identical in shape to C1-C9's version."""
+    """Phase D-R4: HS256 (legacy ServiceJWTAuthentication) verification
+    removed — central auth (RS256) is the only live path (confirmed via
+    R1-R3/blockers-clear: frontend rebuilt on NEXT_PUBLIC_AUTH_SOURCE=central,
+    auth-8001 stopped, zero HS256 issuance reaching this service). Delegates
+    straight to CentralAuthAuthentication; kept the class name/shape
+    (still a thin BaseAuthentication wrapper) to avoid rippling a rename
+    through settings.py. See docs/PHASE_D_R4R6_REMOVAL_RESULT.md."""
 
     def authenticate(self, request):
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if not auth_header.startswith('Bearer '):
-            return None
-        token = auth_header.split(' ', 1)[1]
-        try:
-            header = jwt.get_unverified_header(token)
-        except jwt.InvalidTokenError:
-            return None
-        if header.get('alg') == 'RS256':
-            return CentralAuthAuthentication().authenticate(request)
-        return ServiceJWTAuthentication().authenticate(request)
+        return CentralAuthAuthentication().authenticate(request)
 
     def authenticate_header(self, request):
         return 'Bearer'
